@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDefaultThemeName, listThemeNames } from "../../../lib/theme";
+import { getDefaultThemeName, listThemeNames } from "@/lib/theme";
 
 export async function GET() {
   try {
