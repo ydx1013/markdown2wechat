@@ -3,8 +3,9 @@ import path from "path";
 
 type ThemeConfig = any;
 
-// 始终固定读取 Next.js 项目（next 目录）下的 theme，而不是外层 FastAPI 项目的 theme
-const THEME_DIR = path.join(__dirname, "..", "theme");
+// 读取 Next.js 项目（next 目录）下的 theme：
+// 在 dev 和 build 后运行时，process.cwd() 都指向 next 项目根目录
+const THEME_DIR = path.join(process.cwd(), "theme");
 
 // 缓存主题配置
 const themeConfigCache: Record<string, ThemeConfig> = {};
