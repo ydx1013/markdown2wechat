@@ -90,28 +90,29 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## 访问地址
 
-启动后访问：http://localhost:8000
+- **本地 FastAPI 服务**：启动后访问 `http://localhost:8000`
+- **在线体验地址**：[`https://markdown2wechat.not404.net/`](https://markdown2wechat.not404.net/)  
+  该地址基于本项目 `next` 目录下的 Next.js 版本部署在 Vercel 上，功能和效果与 FastAPI 版本保持一致，仅因 Vercel 可免费托管而提供的额外在线体验入口。
 
 ## 项目结构
 
 ```
 markdown2wechat/
-├── 1.json              # 主题配置文件
-├── main.py             # FastAPI主程序
-├── pyproject.toml      # 项目配置（uv使用）
-├── requirements.txt    # Python依赖（pip使用）
-├── Dockerfile          # Docker镜像构建文件
-├── docker-compose.yml  # Docker Compose配置
-├── docker-start.bat    # Windows Docker启动脚本
-├── docker-start.sh     # Linux/macOS Docker启动脚本
-├── run.bat             # Windows本地运行脚本
-├── theme/              # 通过爬虫脚本抓取到的 mdnice 主题（每个主题一个 json）
+├── main.py             # FastAPI 主程序
+├── next/               # 本项目的 Next.js 复刻版，功能与 FastAPI 版本一致，可直接部署到 Vercel
+│   ├── app/            # Next.js App Router 页面与 API 路由
+│   ├── lib/            # Next.js 端的主题读取工具（只读取 next/theme 下的主题）
+│   └── theme/          # Next.js 使用的主题 JSON（可与根目录 theme 复用一份拷贝）
+├── pyproject.toml      # 项目配置（uv 使用）
+├── requirements.txt    # Python 依赖（pip 使用）
+├── Dockerfile          # Docker 镜像构建文件
+├── docker-compose.yml  # Docker Compose 配置
+├── theme/              # FastAPI 版本使用的 mdnice 主题（每个主题一个 json）
 ├── spider/             # 主题爬虫脚本目录
-│   ├── spider.py       # 从 mdnice 拉取所有主题的脚本
-│   └── readme.md       # 简要说明
-├── templates/          # HTML模板目录
-│   └── index.html     # 前端页面
-└── static/            # 静态文件目录
+│   └── spider.py       # 从 mdnice 拉取所有主题的脚本
+├── templates/          # HTML 模板目录
+│   └── index.html      # 前端页面
+└── static/             # 静态文件目录（如示例截图等）
 ```
 
 ## API接口
