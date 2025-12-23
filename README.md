@@ -5,7 +5,7 @@
 ## 功能特点
 
 - ✅ 实时预览：左侧编辑Markdown，右侧实时显示转换效果
-- ✅ 主题配置：使用`1.json`主题配置文件自定义样式
+- ✅ 主题配置：使用theme文件夹的主题配置文件自定义样式
 - ✅ 响应式设计：支持拖拽调整左右面板大小
 - ✅ 防抖优化：输入防抖，减少不必要的API调用
 
@@ -113,12 +113,13 @@ markdown2wechat/
 ## API接口
 
 ### POST /api/convert
-转换Markdown为公众号格式HTML
+转换Markdown为公众号格式HTML（支持按主题名称切换样式）。
 
 **请求体：**
 ```json
 {
-  "markdown": "# 标题\n\n这是内容"
+  "markdown": "# 标题\n\n这是内容",
+  "theme": "山吹"    // 可选，主题名称，不传则使用默认主题
 }
 ```
 
@@ -127,8 +128,9 @@ markdown2wechat/
 {
   "success": true,
   "html": "<div id=\"nice\">...</div><style>...</style>",
-  "style": "...",
-  "customCss": "..."
+  "style": "...",       // 主题的 style 字段
+  "customCss": "...",   // 主题的自定义 CSS（customStyle.customCss）
+  "theme": "山吹"       // 实际使用的主题名称
 }
 ```
 
