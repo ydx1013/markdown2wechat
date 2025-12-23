@@ -4,7 +4,7 @@ import {
   getCustomCss,
   getDefaultThemeName,
   getThemeStyle,
-} from "@/lib/theme";
+} from "../../../lib/theme";
 
 const md = new MarkdownIt({
   html: true,
