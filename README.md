@@ -9,13 +9,18 @@
 - ✅ 响应式设计：支持拖拽调整左右面板大小
 - ✅ 防抖优化：输入防抖，减少不必要的API调用
 
-## 项目效果
+## 项目效果与体验
 
 ![项目效果预览](static/image.png)
 
+**在线体验地址**：[`https://md2wechat.not404.net/`](https://md2wechat.not404.net/)  
+该地址基于本项目 `next` 目录下的 Next.js 版本部署在 Vercel 上，功能和效果与 FastAPI 版本保持一致。
+
+**本地运行**：启动后访问 `http://localhost:8000`
+
 ## 安装依赖
 
-### 使用 uv（推荐）
+### 使用 uv
 
 [uv](https://github.com/astral-sh/uv) 是一个极快的 Python 包管理器和项目管理工具。
 
@@ -34,7 +39,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 #### 使用 uv 安装依赖
 
 ```bash
-# 方式1：使用pyproject.toml（推荐）
+# 方式1：使用pyproject.toml
 uv sync
 
 # 方式2：使用requirements.txt
@@ -56,7 +61,7 @@ uv run python main.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 使用 pip（传统方式）
+### 使用 pip
 
 ```bash
 pip install -r requirements.txt
@@ -76,7 +81,7 @@ uv run python main.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 使用传统方式
+### 使用 pip
 
 ```bash
 python main.py
@@ -87,12 +92,6 @@ python main.py
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-## 访问地址
-
-- **本地 FastAPI 服务**：启动后访问 `http://localhost:8000`
-- **在线体验地址**：[`https://markdown2wechat.not404.net/`](https://markdown2wechat.not404.net/)  
-  该地址基于本项目 `next` 目录下的 Next.js 版本部署在 Vercel 上，功能和效果与 FastAPI 版本保持一致，仅因 Vercel 可免费托管而提供的额外在线体验入口。
 
 ## 项目结构
 
@@ -173,7 +172,7 @@ MDNICE_AUTH=Bearer xxx.yyy.zzz      # 必填，从浏览器复制 mdnice 的 Aut
 在项目根目录执行：
 
 ```bash
-# 使用 uv（推荐）
+# 使用 uv
 uv run python spider/spider.py
 
 # 或使用系统 Python
@@ -226,11 +225,7 @@ POST /api/convert
 
 ## Docker 部署
 
-### 使用 Docker Compose（推荐）
-
-**快速启动：**
-- Windows: 双击运行 `docker-start.bat`
-- Linux/macOS: 运行 `bash docker-start.sh`
+### 使用 Docker Compose
 
 **手动启动：**
 ```bash
@@ -265,6 +260,6 @@ docker run -d -p 8000:8000 --name markdown2wechat markdown2wechat
 - **前端**: 原生HTML/CSS/JavaScript
 - **Markdown解析**: python-markdown
 - **主题配置**: JSON格式的CSS样式配置
-- **包管理**: uv（推荐）或 pip
+- **包管理**: uv 或 pip
 - **容器化**: Docker + Docker Compose
 
