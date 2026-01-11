@@ -284,7 +284,7 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
             // 确保 span.content 在对应的 heading 内，且前面没有其他 span.content
             if (between && !between.includes('</span>')) {
               if (spanAttrs.includes('style=')) {
-                return hTag + between + spanStart + spanAttrs.replace(/style=["']([^"']*)["']/, (styleMatch, existingStyle) => {
+                return hTag + between + spanStart + spanAttrs.replace(/style=["']([^"']*)["']/, (_styleMatch: string, existingStyle: string) => {
                   return `style="${mergeStyles(existingStyle, styles)}"`;
                 }) + spanEnd;
               } else {
