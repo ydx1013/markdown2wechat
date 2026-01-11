@@ -1,6 +1,9 @@
 /**
  * 将 CSS 样式内联到 HTML 元素上
+ * 使用 cheerio 进行 DOM 解析，与 Python 版本保持一致
  */
+
+import * as cheerio from 'cheerio';
 
 interface CssRule {
   selector: string;
@@ -16,34 +19,121 @@ function parseCssRules(cssText: string): CssRule[] {
   // 移除注释
   cssText = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
   
-  // 匹配 CSS 规则：选择器 { 样式 }
-  // 处理嵌套的大括号（如 @media）
-  const rulePattern = /([^{]+)\{([^}]+)\}/g;
-  let match;
+  // 移除 @media 等规则（暂时跳过）
+  cssText = cssText.replace(/@[^{]+\{[^}]*\{[^}]*\}[^}]*\}/g, '');
   
-  while ((match = rulePattern.exec(cssText)) !== null) {
-    let selector = match[1].trim();
-    const styles = match[2].trim();
+  // 匹配 CSS 规则：选择器 { 样式 }
+  // 使用更精确的匹配，处理嵌套大括号
+  let i = 0;
+  while (i < cssText.length) {
+    // 找到选择器开始（跳过空白）
+    if (/\s/.test(cssText[i])) {
+      i++;
+      continue;
+    }
     
-    // 清理选择器（移除多余空格）
-    selector = selector.replace(/\s+/g, ' ');
+    // 找到第一个 {
+    const braceStart = cssText.indexOf('{', i);
+    if (braceStart === -1) {
+      break;
+    }
     
-    if (selector && styles) {
+    const selector = cssText.substring(i, braceStart).trim();
+    
+    // 找到匹配的 }
+    let braceCount = 1;
+    let braceEnd = braceStart + 1;
+    while (braceEnd < cssText.length && braceCount > 0) {
+      if (cssText[braceEnd] === '{') {
+        braceCount++;
+      } else if (cssText[braceEnd] === '}') {
+        braceCount--;
+      }
+      braceEnd++;
+    }
+    
+    if (braceCount === 0) {
+      const styles = cssText.substring(braceStart + 1, braceEnd - 1).trim();
+      
       // 处理逗号分隔的多个选择器
       const selectors = selector.split(',').map(s => s.trim());
       for (const sel of selectors) {
-        if (sel) {
-          rules.push({ selector: sel, styles });
+        if (sel && styles) {
+          // 清理选择器
+          const cleaned = sel.replace(/\s+/g, ' ');
+          rules.push({ selector: cleaned, styles });
         }
       }
     }
+    
+    i = braceEnd;
   }
   
   return rules;
 }
 
 /**
- * 合并两个样式字符串，去重相同的 CSS 属性
+ * 检查 CSS 选择器是否匹配元素
+ */
+function selectorMatchesElement(selector: string, element: cheerio.Element, $: cheerio.CheerioAPI): boolean {
+  if (!selector || !element || !element.tagName) {
+    return false;
+  }
+  
+  // 移除伪类和伪元素
+  let cleanSelector = selector.replace(/:[a-z-]+(\([^)]*\))?/g, '');
+  cleanSelector = cleanSelector.replace(/::[a-z-]+/g, '');
+  
+  // 处理后代选择器和子选择器（简化：只检查最后一个部分）
+  if (/\s|>/.test(cleanSelector)) {
+    const parts = cleanSelector.split(/[\s>]+/);
+    cleanSelector = parts[parts.length - 1] || cleanSelector;
+  }
+  
+  // 处理组合选择器（如 h1.content, #nice h1, .content 等）
+  // 提取标签、class 和 id
+  const tagMatch = cleanSelector.match(/^([a-z0-9]+)/);
+  const tagName = tagMatch ? tagMatch[1] : null;
+  
+  const classes = (cleanSelector.match(/\.([a-z0-9_-]+)/g) || []).map(c => c.substring(1));
+  const ids = (cleanSelector.match(/#([a-z0-9_-]+)/g) || []).map(id => id.substring(1));
+  
+  // 检查标签
+  if (tagName && element.tagName !== tagName) {
+    return false;
+  }
+  
+  // 检查 class
+  if (classes.length > 0) {
+    const elementClasses = $(element).attr('class') || '';
+    const classList = elementClasses.split(/\s+/).filter(c => c);
+    for (const cls of classes) {
+      if (!classList.includes(cls)) {
+        return false;
+      }
+    }
+  }
+  
+  // 检查 id
+  if (ids.length > 0) {
+    const elementId = $(element).attr('id') || '';
+    for (const id of ids) {
+      if (elementId !== id) {
+        return false;
+      }
+    }
+  }
+  
+  // 如果没有指定标签、class 或 id，则匹配所有元素（不应该发生）
+  if (!tagName && classes.length === 0 && ids.length === 0) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * 合并两个样式字符串
  */
 function mergeStyles(existing: string, newStyles: string): string {
   if (!existing) {
@@ -62,7 +152,9 @@ function mergeStyles(existing: string, newStyles: string): string {
       if (colonIndex > 0) {
         const key = trimmed.substring(0, colonIndex).trim();
         const value = trimmed.substring(colonIndex + 1).trim();
-        existingProps[key] = value;
+        if (key && value) {
+          existingProps[key] = value;
+        }
       }
     }
   });
@@ -75,7 +167,9 @@ function mergeStyles(existing: string, newStyles: string): string {
       if (colonIndex > 0) {
         const key = trimmed.substring(0, colonIndex).trim();
         const value = trimmed.substring(colonIndex + 1).trim();
-        existingProps[key] = value; // 新样式覆盖旧样式
+        if (key && value) {
+          existingProps[key] = value; // 新样式覆盖旧样式
+        }
       }
     }
   });
@@ -100,77 +194,22 @@ function selectorPriority(selector: string): number {
     priority += 1;
   }
   // 后代选择器增加复杂度
-  if (/\s/.test(selector) || />/.test(selector)) {
+  if (/\s|>/.test(selector)) {
     priority += 5;
   }
   return priority;
 }
 
 /**
- * 检查选择器是否匹配元素（简化版本）
- */
-function selectorMatchesElement(selector: string, element: any): boolean {
-  // 移除伪类和伪元素
-  selector = selector.replace(/::?[a-z-]+(\([^)]*\))?/g, '');
-  
-  // 处理组合选择器（如 h1.content）
-  if (selector.includes('.')) {
-    const parts = selector.split('.');
-    const tagPart = parts[0];
-    const classPart = parts[1];
-    
-    if (tagPart && element.tagName?.toLowerCase() !== tagPart.toLowerCase()) {
-      return false;
-    }
-    
-    if (classPart) {
-      const classList = element.className || '';
-      const classes = typeof classList === 'string' 
-        ? classList.split(/\s+/) 
-        : Array.isArray(classList) 
-        ? classList 
-        : [];
-      return classes.includes(classPart);
-    }
-  }
-  
-  // 处理 ID 选择器
-  if (selector.startsWith('#')) {
-    const id = selector.substring(1).split('.')[0].split(':')[0];
-    return element.id === id;
-  }
-  
-  // 处理 class 选择器
-  if (selector.startsWith('.')) {
-    const classVal = selector.substring(1).split(':')[0];
-    const classList = element.className || '';
-    const classes = typeof classList === 'string' 
-      ? classList.split(/\s+/) 
-      : Array.isArray(classList) 
-      ? classList 
-      : [];
-    return classes.includes(classVal);
-  }
-  
-  // 处理标签选择器
-  if (/^[a-z0-9]+$/.test(selector)) {
-    return element.tagName?.toLowerCase() === selector.toLowerCase();
-  }
-  
-  return false;
-}
-
-/**
  * 将 CSS 样式内联到 HTML 元素上
  */
 export function applyInlineStyles(htmlContent: string, cssText: string): string {
-  // 使用 cheerio 或 jsdom 解析 HTML
-  // 为了简化，这里使用正则表达式和字符串操作
-  // 注意：这是一个简化版本，可能无法处理所有复杂情况
+  const $ = cheerio.load(htmlContent, { decodeEntities: false });
   
+  // 解析 CSS 规则
   const cssRules = parseCssRules(cssText);
   
-  // 按优先级排序
+  // 按选择器优先级排序
   const indexedRules = cssRules.map((rule, index) => ({
     index,
     selector: rule.selector,
@@ -185,13 +224,7 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
     return a.index - b.index;
   });
   
-  // 由于 Node.js 环境没有 DOM 解析库，我们使用简化的方法
-  // 对于复杂的 HTML 结构，建议使用 cheerio 或 jsdom
-  // 这里提供一个基于正则表达式的简化实现
-  
-  let result = htmlContent;
-  
-  // 应用样式规则
+  // 应用样式到元素
   for (const { selector, styles } of indexedRules) {
     // 清理选择器
     const cleanSelector = selector.trim();
@@ -201,154 +234,177 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
     
     // 跳过伪类和伪元素选择器（这些样式不应该应用到元素本身）
     if (cleanSelector.includes('::') || /:[a-z-]+(\([^)]*\))?/.test(cleanSelector)) {
-      // 所有伪类和伪元素都跳过
       continue;
     }
     
-    // 跳过包含伪类的选择器（如 h1::before, .content::after 等）
-    if (/::before|::after|:hover|:focus|:active|:visited|:link|:first-child|:last-child|:nth-child/.test(cleanSelector)) {
-      continue;
-    }
-    
-    // 处理 #nice 选择器（只处理单独的 #nice，不处理后代选择器）
-    if (cleanSelector === '#nice' && !cleanSelector.includes(' ')) {
-      result = result.replace(
-        /<section\s+id=["']nice["']([^>]*)>/gi,
-        (match, attrs) => {
-          if (attrs.includes('style=')) {
-            return match.replace(/style=["']([^"']*)["']/, (styleMatch, existingStyle) => {
-              return `style="${mergeStyles(existingStyle, styles)}"`;
-            });
-          } else {
-            return match.replace(/>/, ` style="${styles}">`);
-          }
-        }
-      );
-      continue;
-    }
-    
-    // 处理后代选择器 #nice pre.custom
-    if (selector.startsWith('#nice ')) {
-      const finalSelector = selector.substring(6); // 移除 "#nice "
-      
-      // 处理 pre.custom
-      if (finalSelector.includes('pre.custom') || finalSelector === 'pre.custom') {
-        result = result.replace(
-          /<pre\s+class=["'][^"']*custom[^"']*["']([^>]*)>/gi,
-          (match, attrs) => {
-            if (attrs.includes('style=')) {
-              return match.replace(/style=["']([^"']*)["']/, (styleMatch, existingStyle) => {
-                return `style="${mergeStyles(existingStyle, styles)}"`;
+    // 处理后代选择器和子选择器
+    if (/\s|>/.test(cleanSelector)) {
+      const parts = cleanSelector.split(/[\s>]+/);
+      // 处理 #nice pre.custom 这种情况
+      if (parts.length > 1) {
+        // 检查第一部分是否是 #nice
+        if (parts[0] === '#nice') {
+          // 在 #nice 内部查找匹配的元素
+          const niceSection = $('#nice');
+          if (niceSection.length > 0) {
+            const finalSelector = parts.slice(1).join(' ');
+            // 在 niceSection 内部查找
+            if (finalSelector.startsWith('.')) {
+              const classVal = finalSelector.substring(1).split(':')[0];
+              niceSection.find(`.${classVal}`).each((_, element) => {
+                if (selectorMatchesElement(finalSelector, element, $)) {
+                  const existingStyle = $(element).attr('style') || '';
+                  $(element).attr('style', mergeStyles(existingStyle, styles));
+                }
               });
+            } else if (finalSelector.startsWith('#')) {
+              const idVal = finalSelector.substring(1).split('.')[0].split(':')[0];
+              const element = niceSection.find(`#${idVal}`)[0];
+              if (element && selectorMatchesElement(finalSelector, element, $)) {
+                const existingStyle = $(element).attr('style') || '';
+                $(element).attr('style', mergeStyles(existingStyle, styles));
+              }
             } else {
-              return match.replace(/>/, ` style="${styles}">`);
-            }
-          }
-        );
-      }
-      
-      // 处理 pre.custom code（只在 pre.custom 内的 code）
-      // 注意：只处理 #nice pre.custom code，不处理 #nice p code
-      if (finalSelector === 'pre.custom code' || 
-          (finalSelector.includes('pre') && finalSelector.includes('code') && !finalSelector.includes('p'))) {
-        // 只处理在 pre.custom 内的 code.hljs，避免影响行内代码
-        result = result.replace(
-          /<pre[^>]*class=["'][^"']*custom[^"']*["'][^>]*>[\s\S]*?<code\s+class=["'][^"']*hljs[^"']*["']([^>]*)>/gi,
-          (match, attrs) => {
-            if (attrs.includes('style=')) {
-              return match.replace(/style=["']([^"']*)["']/, (styleMatch, existingStyle) => {
-                return `style="${mergeStyles(existingStyle, styles)}"`;
-              });
-            } else {
-              return match.replace(/>/, ` style="${styles}">`);
-            }
-          }
-        );
-      }
-      
-      // 跳过 #nice p code（行内代码），避免影响代码块
-      // 因为正则表达式难以精确区分，暂时跳过行内代码的样式
-      if (finalSelector === 'p code' || (finalSelector.includes('p') && finalSelector.includes('code'))) {
-        continue;
-      }
-      
-      // 处理 h1 .content, h2 .content 等
-      if (finalSelector.includes('.content')) {
-        const headingMatch = finalSelector.match(/^(h[1-6])\s+\.content/);
-        if (headingMatch) {
-          const headingTag = headingMatch[1];
-          // 使用更精确的匹配，确保在对应的 heading 内
-          // 匹配 <h1>...<span class="content"> 这种结构
-          const regex = new RegExp(`(<${headingTag}[^>]*>)([\\s\\S]*?)(<span\\s+class=["']content["'])([^>]*)(>)`, 'gi');
-          result = result.replace(regex, (match, hTag, between, spanStart, spanAttrs, spanEnd) => {
-            // 确保 span.content 在对应的 heading 内，且前面没有其他 span.content
-            if (between && !between.includes('</span>')) {
-              if (spanAttrs.includes('style=')) {
-                return hTag + between + spanStart + spanAttrs.replace(/style=["']([^"']*)["']/, (_styleMatch: string, existingStyle: string) => {
-                  return `style="${mergeStyles(existingStyle, styles)}"`;
-                }) + spanEnd;
+              // 标签选择器或组合选择器（如 pre.custom, h1 .content）
+              // 处理后代选择器（如 h1 .content）
+              if (/\s/.test(finalSelector)) {
+                // 这是后代选择器，需要在父元素内查找
+                const parts2 = finalSelector.split(/\s+/);
+                const parentTag = parts2[0];
+                const childSelector = parts2.slice(1).join(' ');
+                
+                // 在 niceSection 内查找父元素
+                niceSection.find(parentTag).each((_, parent) => {
+                  // 在父元素内查找子元素
+                  if (childSelector.startsWith('.')) {
+                    const classVal = childSelector.substring(1).split(':')[0];
+                    $(parent).find(`.${classVal}`).each((_, child) => {
+                      if (selectorMatchesElement(childSelector, child, $)) {
+                        const existingStyle = $(child).attr('style') || '';
+                        $(child).attr('style', mergeStyles(existingStyle, styles));
+                      }
+                    });
+                  } else {
+                    // 其他情况
+                    $(parent).find('*').each((_, child) => {
+                      if (selectorMatchesElement(childSelector, child, $)) {
+                        const existingStyle = $(child).attr('style') || '';
+                        $(child).attr('style', mergeStyles(existingStyle, styles));
+                      }
+                    });
+                  }
+                });
               } else {
-                return hTag + between + spanStart + spanAttrs + ` style="${styles}"` + spanEnd;
+                // 单个选择器
+                const tagMatch = finalSelector.match(/^([a-z0-9]+)/);
+                const tagName = tagMatch ? tagMatch[1] : null;
+                
+                if (tagName) {
+                  // 查找所有匹配的元素
+                  niceSection.find(tagName).each((_, element) => {
+                    if (selectorMatchesElement(finalSelector, element, $)) {
+                      const existingStyle = $(element).attr('style') || '';
+                      $(element).attr('style', mergeStyles(existingStyle, styles));
+                    }
+                  });
+                } else {
+                  // 没有标签，可能是纯 class（如 .custom）
+                  if (finalSelector.startsWith('.')) {
+                    const classVal = finalSelector.substring(1).split(':')[0];
+                    niceSection.find(`.${classVal}`).each((_, element) => {
+                      if (selectorMatchesElement(finalSelector, element, $)) {
+                        const existingStyle = $(element).attr('style') || '';
+                        $(element).attr('style', mergeStyles(existingStyle, styles));
+                      }
+                    });
+                  }
+                }
               }
             }
-            return match;
-          });
-        }
-      }
-      
-      // 跳过 span.prefix 和 span.suffix 的样式（它们应该只有 display: none）
-      if (finalSelector.includes('.prefix') || finalSelector.includes('.suffix')) {
-        continue;
-      }
-      
-      // 处理其他标签选择器（如 h1, h2, p, ul, ol 等）
-      const tagMatch = finalSelector.match(/^([a-z0-9]+)(\s|$|\.|#)/);
-      if (tagMatch) {
-        const tagName = tagMatch[1];
-        
-        // 跳过 span 标签（prefix/suffix/content 需要特殊处理）
-        if (tagName === 'span') {
+          }
           continue;
         }
-        
-        // 只处理在 #nice 内的元素
-        const tagRegex = new RegExp(`<${tagName}([^>]*)>`, 'gi');
-        result = result.replace(tagRegex, (match, attrs, offset) => {
-          // 检查是否在 #nice section 内
-          const beforeMatch = result.substring(0, offset);
-          const niceStart = beforeMatch.lastIndexOf('<section');
-          const niceEnd = beforeMatch.lastIndexOf('</section>');
-          
-          // 如果在 #nice section 内（有开始但没有对应的结束，或者结束在开始之后）
-          if (niceStart !== -1 && (niceEnd === -1 || niceEnd < niceStart)) {
-            // 检查是否在 span.prefix 或 span.suffix 内（这些不应该应用样式）
-            const afterMatch = result.substring(offset);
-            const nextSpan = afterMatch.match(/<span[^>]*class=["'](prefix|suffix)["']/);
-            if (nextSpan && offset < result.length) {
-              // 如果后面紧跟着 span.prefix 或 span.suffix，可能是匹配错误，跳过
-              const checkRange = result.substring(Math.max(0, offset - 50), Math.min(result.length, offset + 50));
-              if (checkRange.includes('class="prefix') || checkRange.includes('class="suffix')) {
-                return match;
-              }
-            }
-            
-            if (attrs.includes('style=')) {
-              return match.replace(/style=["']([^"']*)["']/, (styleMatch, existingStyle) => {
-                return `style="${mergeStyles(existingStyle, styles)}"`;
-              });
-            } else {
-              return match.replace(/>/, ` style="${styles}">`);
-            }
-          }
-          return match;
-        });
       }
-      
+    }
+    
+    // 特殊处理 #nice 选择器（单独的选择器，不是后代选择器）
+    if (cleanSelector === '#nice' && !/\s/.test(cleanSelector)) {
+      const niceSection = $('#nice');
+      if (niceSection.length > 0) {
+        const existingStyle = niceSection.attr('style') || '';
+        niceSection.attr('style', mergeStyles(existingStyle, styles));
+      }
       continue;
     }
     
-    // 处理其他选择器（简化处理）
-    // 这里可以添加更多选择器类型的处理
+    // 查找所有可能匹配的元素
+    const candidates: cheerio.Element[] = [];
+    
+    if (cleanSelector.startsWith('#')) {
+      // ID 选择器
+      const idVal = cleanSelector.substring(1).split('.')[0].split(':')[0];
+      const element = $(`#${idVal}`)[0];
+      if (element && selectorMatchesElement(cleanSelector, element, $)) {
+        candidates.push(element);
+      }
+    } else if (cleanSelector.startsWith('.')) {
+      // Class 选择器
+      const classVal = cleanSelector.substring(1).split(':')[0];
+      $(`.${classVal}`).each((_, element) => {
+        if (selectorMatchesElement(cleanSelector, element, $)) {
+          candidates.push(element);
+        }
+      });
+    } else {
+      // 标签选择器或组合选择器
+      const tagMatch = cleanSelector.match(/^([a-z0-9]+)/);
+      const tagName = tagMatch ? tagMatch[1] : null;
+      
+      if (tagName) {
+        $(tagName).each((_, element) => {
+          if (selectorMatchesElement(cleanSelector, element, $)) {
+            candidates.push(element);
+          }
+        });
+      } else {
+        // 没有标签，可能是纯 class 或 id（前面已处理）
+        $('*').each((_, element) => {
+          if (selectorMatchesElement(cleanSelector, element, $)) {
+            candidates.push(element);
+          }
+        });
+      }
+    }
+    
+    // 应用样式到匹配的元素
+    for (const element of candidates) {
+      // 确保元素在 #nice section 内
+      const niceSection = $('#nice');
+      if (niceSection.length > 0) {
+        const $element = $(element);
+        const isInNice = $element.closest('#nice').length > 0 || niceSection.find($element).length > 0;
+        if (!isInNice) {
+          continue;
+        }
+      }
+      
+      const existingStyle = $(element).attr('style') || '';
+      $(element).attr('style', mergeStyles(existingStyle, styles));
+    }
+  }
+  
+  // 确保 span.prefix 和 span.suffix 只有 display: none
+  $('span.prefix, span.suffix').attr('style', 'display: none;');
+  
+  // 获取结果
+  let result = $.html();
+  
+  // 修复 cheerio 可能添加的额外标签
+  if (result.includes('<html>')) {
+    const bodyMatch = result.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    if (bodyMatch) {
+      result = bodyMatch[1];
+    }
   }
   
   // 替换所有 <br/> 为 <br>（与 target.html 保持一致）
@@ -360,15 +416,6 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
   // 清理双分号
   result = result.replace(/;;+/g, ';');
   
-  // 确保 span.prefix 和 span.suffix 只有 display: none（移除其他样式）
-  result = result.replace(
-    /<span\s+class=["'](prefix|suffix)["']([^>]*)>/gi,
-    (match, className, attrs) => {
-      // 只保留 display: none
-      return `<span class="${className}" style="display: none;">`;
-    }
-  );
-  
   // 清理颜色格式：将 rgba(0, 150, 136, 1) 转换为 rgb(0, 150, 136)
   result = result.replace(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*1\)/g, 'rgb($1, $2, $3)');
   
@@ -377,4 +424,3 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
   
   return result;
 }
-
