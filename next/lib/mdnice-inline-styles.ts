@@ -75,8 +75,15 @@ function parseCssRules(cssText: string): CssRule[] {
 /**
  * 检查 CSS 选择器是否匹配元素
  */
-function selectorMatchesElement(selector: string, element: cheerio.Element, $: cheerio.CheerioAPI): boolean {
-  if (!selector || !element || !element.tagName) {
+function selectorMatchesElement(selector: string, element: cheerio.AnyNode, $: cheerio.CheerioAPI): boolean {
+  if (!selector || !element) {
+    return false;
+  }
+  
+  const $element = $(element);
+  const tagName = $element.prop('tagName')?.toLowerCase();
+  
+  if (!tagName) {
     return false;
   }
   
@@ -93,19 +100,19 @@ function selectorMatchesElement(selector: string, element: cheerio.Element, $: c
   // 处理组合选择器（如 h1.content, #nice h1, .content 等）
   // 提取标签、class 和 id
   const tagMatch = cleanSelector.match(/^([a-z0-9]+)/);
-  const tagName = tagMatch ? tagMatch[1] : null;
+  const expectedTagName = tagMatch ? tagMatch[1] : null;
   
   const classes = (cleanSelector.match(/\.([a-z0-9_-]+)/g) || []).map(c => c.substring(1));
   const ids = (cleanSelector.match(/#([a-z0-9_-]+)/g) || []).map(id => id.substring(1));
   
   // 检查标签
-  if (tagName && element.tagName !== tagName) {
+  if (expectedTagName && tagName !== expectedTagName) {
     return false;
   }
   
   // 检查 class
   if (classes.length > 0) {
-    const elementClasses = $(element).attr('class') || '';
+    const elementClasses = $element.attr('class') || '';
     const classList = elementClasses.split(/\s+/).filter(c => c);
     for (const cls of classes) {
       if (!classList.includes(cls)) {
@@ -116,7 +123,7 @@ function selectorMatchesElement(selector: string, element: cheerio.Element, $: c
   
   // 检查 id
   if (ids.length > 0) {
-    const elementId = $(element).attr('id') || '';
+    const elementId = $element.attr('id') || '';
     for (const id of ids) {
       if (elementId !== id) {
         return false;
@@ -125,7 +132,7 @@ function selectorMatchesElement(selector: string, element: cheerio.Element, $: c
   }
   
   // 如果没有指定标签、class 或 id，则匹配所有元素（不应该发生）
-  if (!tagName && classes.length === 0 && ids.length === 0) {
+  if (!expectedTagName && classes.length === 0 && ids.length === 0) {
     return false;
   }
   
@@ -338,7 +345,7 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
     }
     
     // 查找所有可能匹配的元素
-    const candidates: cheerio.Element[] = [];
+    const candidates: cheerio.AnyNode[] = [];
     
     if (cleanSelector.startsWith('#')) {
       // ID 选择器
