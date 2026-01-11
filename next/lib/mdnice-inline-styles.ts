@@ -4,6 +4,7 @@
  */
 
 import * as cheerio from 'cheerio';
+import type { Element } from 'domhandler';
 
 interface CssRule {
   selector: string;
@@ -75,17 +76,12 @@ function parseCssRules(cssText: string): CssRule[] {
 /**
  * 检查 CSS 选择器是否匹配元素
  */
-function selectorMatchesElement(selector: string, element: cheerio.AnyNode, $: cheerio.CheerioAPI): boolean {
-  if (!selector || !element) {
+function selectorMatchesElement(selector: string, element: Element, $: cheerio.CheerioAPI): boolean {
+  if (!selector || !element || !element.tagName) {
     return false;
   }
   
-  const $element = $(element);
-  const tagName = $element.prop('tagName')?.toLowerCase();
-  
-  if (!tagName) {
-    return false;
-  }
+  const tagName = element.tagName.toLowerCase();
   
   // 移除伪类和伪元素
   let cleanSelector = selector.replace(/:[a-z-]+(\([^)]*\))?/g, '');
@@ -112,6 +108,7 @@ function selectorMatchesElement(selector: string, element: cheerio.AnyNode, $: c
   
   // 检查 class
   if (classes.length > 0) {
+    const $element = $(element);
     const elementClasses = $element.attr('class') || '';
     const classList = elementClasses.split(/\s+/).filter(c => c);
     for (const cls of classes) {
@@ -123,6 +120,7 @@ function selectorMatchesElement(selector: string, element: cheerio.AnyNode, $: c
   
   // 检查 id
   if (ids.length > 0) {
+    const $element = $(element);
     const elementId = $element.attr('id') || '';
     for (const id of ids) {
       if (elementId !== id) {
@@ -345,7 +343,7 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
     }
     
     // 查找所有可能匹配的元素
-    const candidates: cheerio.AnyNode[] = [];
+    const candidates: Element[] = [];
     
     if (cleanSelector.startsWith('#')) {
       // ID 选择器
