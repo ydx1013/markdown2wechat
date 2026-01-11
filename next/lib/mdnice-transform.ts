@@ -131,7 +131,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
   
   // 4. 处理列表项 - 用 <section> 包裹内容
   result = result.replace(
-    /<li([^>]*)>([^<]+(?:<[^>]+>[^<]*</[^>]+>)*[^<]*)<\/li>/gi,
+    /<li([^>]*)>([\s\S]*?)<\/li>/gi,
     (match, attrs, content) => {
       // 如果已经有 section，跳过
       if (content.includes('<section')) {
