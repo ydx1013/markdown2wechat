@@ -107,7 +107,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
       let processedCodeContent = codeContent;
       // 按行处理，每行的前导空格转换为 &nbsp;
       const lines = processedCodeContent.split('\n');
-      const processedLines = lines.map(line => {
+      const processedLines = lines.map((line: string) => {
         // 计算前导空格数
         const leadingSpaces = line.length - line.trimStart().length;
         if (leadingSpaces > 0) {
