@@ -209,7 +209,7 @@ function selectorPriority(selector: string): number {
  * 将 CSS 样式内联到 HTML 元素上
  */
 export function applyInlineStyles(htmlContent: string, cssText: string): string {
-  const $ = cheerio.load(htmlContent, { decodeEntities: false });
+  const $ = cheerio.load(htmlContent);
   
   // 解析 CSS 规则
   const cssRules = parseCssRules(cssText);
