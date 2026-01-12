@@ -192,7 +192,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
  * 关键：代码块中的 \n 字面量应该保持为字面量，不应该转换为换行符
  * 只有实际的换行符才应该转换为 <br>
  */
-function processCodeContent($code: cheerio.Cheerio<cheerio.Element>): void {
+function processCodeContent($code: cheerio.Cheerio<any>): void {
   // 获取代码的原始 HTML 内容（可能包含语法高亮标签）
   const originalHtml = $code.html() || '';
   
