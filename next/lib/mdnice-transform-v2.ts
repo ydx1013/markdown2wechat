@@ -181,6 +181,19 @@ export function transformToMdniceFormat(htmlContent: string): string {
     result = sectionMatch[0];
   }
   
+  // 修复 cheerio 可能转义的 HTML 实体（在代码块中）
+  // 注意：只在 <code> 标签内修复，避免影响其他内容
+  result = result.replace(/(<code[^>]*>)([\s\S]*?)(<\/code>)/gi, (match, openTag, content, closeTag) => {
+    // 修复被转义的 &nbsp; 和 <br>
+    let fixedContent = content
+      .replace(/&amp;nbsp;/g, '&nbsp;')
+      .replace(/&amp;lt;br&amp;gt;/g, '<br>')
+      .replace(/&lt;br&gt;/g, '<br>')
+      .replace(/&amp;#39;/g, "'")
+      .replace(/&amp;quot;/g, '"');
+    return openTag + fixedContent + closeTag;
+  });
+  
   // 替换 <br/> 为 <br>
   result = result.replace(/<br\s*\/>/gi, '<br>');
   
@@ -201,26 +214,60 @@ function processCodeContent($code: cheerio.Cheerio<any>): void {
   
   if (hasHtmlTags) {
     // 如果已经有 HTML 标签（语法高亮），需要保护它们
-    // 使用 cheerio 解析，然后处理文本节点
-    const $temp = cheerio.load(originalHtml);
+    // 方法：使用正则表达式分割 HTML 标签和文本，分别处理
     
-    // 处理所有文本节点
-    $temp('*').contents().each((_, node) => {
-      if (node.type === 'text') {
-        const text = node.data || '';
-        // 只处理实际的换行符，不处理 \n 字面量
-        // 将实际换行符转换为 <br>，空格转换为 &nbsp;
-        const processed = processCodeText(text);
-        node.data = processed;
+    // 使用正则表达式提取所有 HTML 标签和文本
+    const parts: Array<{ type: 'text' | 'tag'; content: string }> = [];
+    let lastIndex = 0;
+    const tagRegex = /<[^>]+>/g;
+    let match;
+    
+    while ((match = tagRegex.exec(originalHtml)) !== null) {
+      // 添加标签前的文本
+      if (match.index > lastIndex) {
+        const text = originalHtml.substring(lastIndex, match.index);
+        if (text) {
+          parts.push({ type: 'text', content: text });
+        }
+      }
+      // 添加标签
+      parts.push({ type: 'tag', content: match[0] });
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // 添加剩余的文本
+    if (lastIndex < originalHtml.length) {
+      const text = originalHtml.substring(lastIndex);
+      if (text) {
+        parts.push({ type: 'text', content: text });
+      }
+    }
+    
+    // 处理文本部分：将换行转换为 <br>，空格转换为 &nbsp;
+    // 但保持 HTML 标签不变
+    const processedParts = parts.map(part => {
+      if (part.type === 'tag') {
+        return part.content; // 保持标签不变
+      } else {
+        // 处理文本：将换行转换为 <br>，空格转换为 &nbsp;
+        return processCodeText(part.content);
       }
     });
     
-    // 更新代码内容
-    $code.html($temp.html() || '');
+    // 重新组合
+    const processedHtml = processedParts.join('');
+    
+    // 直接设置 HTML
+    // 注意：cheerio 在设置 HTML 时可能会转义 HTML 实体
+    // 我们会在最后统一修复（在 transformToMdniceFormat 函数的最后）
+    $code.html(processedHtml);
   } else {
     // 如果没有 HTML 标签，直接处理文本
     const text = $code.text();
     const processed = processCodeText(text);
+    
+    // 直接设置 HTML 内容（包含 <br> 和 &nbsp;）
+    // 注意：cheerio 可能会转义，我们会在最后统一修复
     $code.html(processed);
   }
 }
