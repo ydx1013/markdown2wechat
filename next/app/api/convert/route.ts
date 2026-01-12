@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import MarkdownIt from "markdown-it";
-// @ts-ignore - highlight.js 可能没有完整的类型定义
-import * as hljs from "highlight.js";
+// highlight.js 的正确导入方式
+// highlight.js 11.x 可能使用 CommonJS 导出
+// @ts-ignore
+const hljs = require("highlight.js");
+// 尝试获取实际的 highlight.js 对象
+const hljsInstance = hljs.default || hljs;
 import {
   getCustomCss,
   getDefaultThemeName,
@@ -26,18 +30,42 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   highlight: function (str: string, lang: string) {
-    // 如果指定了语言且 highlight.js 支持该语言，则进行语法高亮
-    if (lang && hljs.getLanguage(lang)) {
+    // 如果指定了语言，尝试进行语法高亮
+    if (lang && hljsInstance) {
       try {
-        // highlight.js 会返回高亮后的 HTML，包含 <span class="hljs-*"> 标签
-        const highlighted = hljs.highlight(str, { language: lang }).value;
-        // markdown-it 的 highlight 函数只需要返回 <code> 标签内的内容
-        // markdown-it 会自动添加 <pre><code> 标签
-        return highlighted;
+        // highlight.js 11.x 的 API
+        // 尝试使用 highlight 方法
+        let result: any = null;
+        
+        // 方法1: 直接调用 highlight (highlight.js 11.x)
+        if (typeof hljsInstance.highlight === "function") {
+          try {
+            result = hljsInstance.highlight(str, { language: lang });
+          } catch (e) {
+            // 如果失败，尝试其他方法
+          }
+        }
+        
+        // 方法2: 如果方法1失败，尝试使用旧的 API
+        if (!result && typeof hljsInstance.highlight === "function") {
+          try {
+            result = hljsInstance.highlight(lang, str);
+          } catch (e) {
+            // 继续尝试
+          }
+        }
+        
+        // 如果成功高亮，返回结果
+        if (result && result.value) {
+          // markdown-it 的 highlight 函数只需要返回 <code> 标签内的内容
+          // markdown-it 会自动添加 <pre><code> 标签
+          return result.value;
+        }
       } catch (err) {
         // 如果高亮失败，返回默认的转义代码
       }
     }
+    
     // 如果没有指定语言或不支持，返回默认的转义代码
     // markdown-it 会自动添加 <pre><code> 标签
     return escapeHtml(str);
