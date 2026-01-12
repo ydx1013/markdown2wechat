@@ -30,8 +30,12 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   highlight: function (str: string, lang: string) {
+    // 统一将所有代码块都当作 bash 处理（用户要求）
+    // 这样可以避免某些语言格式导致的解析问题
+    const normalizedLang = lang ? 'bash' : '';
+    
     // 如果指定了语言，尝试进行语法高亮
-    if (lang && hljsInstance) {
+    if (normalizedLang && hljsInstance) {
       try {
         // highlight.js 11.x 的 API
         // 尝试使用 highlight 方法
@@ -40,7 +44,7 @@ const md = new MarkdownIt({
         // 方法1: 直接调用 highlight (highlight.js 11.x)
         if (typeof hljsInstance.highlight === "function") {
           try {
-            result = hljsInstance.highlight(str, { language: lang });
+            result = hljsInstance.highlight(str, { language: normalizedLang });
           } catch (e) {
             // 如果失败，尝试其他方法
           }
@@ -49,7 +53,7 @@ const md = new MarkdownIt({
         // 方法2: 如果方法1失败，尝试使用旧的 API
         if (!result && typeof hljsInstance.highlight === "function") {
           try {
-            result = hljsInstance.highlight(lang, str);
+            result = hljsInstance.highlight(normalizedLang, str);
           } catch (e) {
             // 继续尝试
           }
@@ -90,6 +94,16 @@ export async function POST(req: NextRequest) {
     }
 
     let htmlContent = md.render(markdown);
+    
+    // 调试：检查代码块是否正确解析
+    // 如果代码块数量异常，可能是解析问题
+    const preMatches = htmlContent.match(/<pre[^>]*>/g);
+    const codeMatches = htmlContent.match(/<code[^>]*>/g);
+    
+    // 如果代码块数量不匹配，可能是解析问题
+    if (preMatches && codeMatches && preMatches.length !== codeMatches.length) {
+      console.warn(`警告：代码块数量不匹配 - pre: ${preMatches.length}, code: ${codeMatches.length}`);
+    }
 
     // 转换为 mdnice 格式
     htmlContent = transformToMdniceFormat(`<div id="nice">${htmlContent}</div>`);
