@@ -405,6 +405,65 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
   // 确保 span.prefix 和 span.suffix 只有 display: none
   $('span.prefix, span.suffix').attr('style', 'display: none;');
   
+  // 清理装饰条 span 的样式：移除 line-height（与 target.html 保持一致）
+  $('pre.custom > span').each((_, element) => {
+    const $span = $(element);
+    const style = $span.attr('style') || '';
+    // 移除 line-height 属性
+    const cleanedStyle = style.replace(/line-height:\s*[^;]+;?/gi, '').replace(/;;+/g, ';').trim();
+    if (cleanedStyle) {
+      $span.attr('style', cleanedStyle);
+    }
+  });
+  
+  // 清理 code.hljs 的冗余样式（与 target.html 保持一致）
+  // target.html 中的 code 样式只包含：overflow-x, padding, color, padding-top, background, border-radius, display, font-family, font-size
+  $('pre.custom code.hljs').each((_, element) => {
+    const $code = $(element);
+    const style = $code.attr('style') || '';
+    // 提取需要的样式属性
+    const neededProps = ['overflow-x', 'padding', 'color', 'padding-top', 'background', 'border-radius', 'display', 'font-family', 'font-size'];
+    const styleObj: Record<string, string> = {};
+    
+    // 解析现有样式
+    style.split(';').forEach(prop => {
+      const trimmed = prop.trim();
+      if (trimmed) {
+        const colonIndex = trimmed.indexOf(':');
+        if (colonIndex > 0) {
+          const key = trimmed.substring(0, colonIndex).trim();
+          const value = trimmed.substring(colonIndex + 1).trim();
+          // 只保留需要的属性
+          if (neededProps.some(needed => key.includes(needed))) {
+            // 对于 padding，需要特殊处理（target.html 中是 padding: 16px）
+            if (key === 'padding-top') {
+              styleObj['padding-top'] = value;
+            } else if (key === 'padding' && !styleObj['padding-top']) {
+              styleObj['padding'] = value;
+            } else if (!styleObj[key]) {
+              styleObj[key] = value;
+            }
+          }
+        }
+      }
+    });
+    
+    // 重新组合样式（按 target.html 的顺序）
+    const cleanedStyle = [
+      `overflow-x: ${styleObj['overflow-x'] || 'auto'}`,
+      `padding: ${styleObj['padding'] || '16px'}`,
+      `color: ${styleObj['color'] || '#abb2bf'}`,
+      `padding-top: ${styleObj['padding-top'] || '15px'}`,
+      `background: ${styleObj['background'] || '#282c34'}`,
+      `border-radius: ${styleObj['border-radius'] || '5px'}`,
+      `display: ${styleObj['display'] || '-webkit-box'}`,
+      `font-family: ${styleObj['font-family'] || 'Consolas, Monaco, Menlo, monospace'}`,
+      `font-size: ${styleObj['font-size'] || '12px'}`
+    ].join('; ');
+    
+    $code.attr('style', cleanedStyle);
+  });
+  
   // 获取结果
   let result = $.html();
   

@@ -92,9 +92,9 @@ export function transformToMdniceFormat(htmlContent: string): string {
         newPreAttrs += ` style="${defaultPreStyle}"`;
       }
       
-      // 添加 code.hljs 的默认样式（注意：默认样式放在后面，会覆盖前面的错误值）
-      // 这些样式必须放在最后，确保覆盖任何错误的样式值
-      const defaultCodeStyle = 'overflow-x: auto; padding: 16px; color: #abb2bf; background-attachment: scroll; background-clip: border-box; background-color: rgba(27, 31, 35, 0.05); background-image: none; background-origin: padding-box; background-position-x: 0%; background-position-y: 0%; background-repeat: no-repeat; background-size: auto; width: auto; margin-top: 0px; margin-bottom: 0px; margin-left: 2px; margin-right: 2px; padding-bottom: 2px; padding-left: 4px; padding-right: 4px; border-top-style: none; border-bottom-style: none; border-left-style: none; border-right-style: none; border-top-width: 3px; border-bottom-width: 3px; border-left-width: 3px; border-right-width: 3px; border-top-color: rgb(0, 0, 0); border-bottom-color: rgba(0, 0, 0, 0.4); border-left-color: rgba(0, 0, 0, 0.4); border-right-color: rgba(0, 0, 0, 0.4); border-top-left-radius: 4px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-bottom-left-radius: 4px; overflow-wrap: break-word; word-break: break-all; padding-top: 15px; background: #282c34; border-radius: 5px; display: -webkit-box; font-family: Consolas, Monaco, Menlo, monospace; font-size: 12px;';
+      // 添加 code.hljs 的默认样式（注意：与 target.html 保持一致，只保留必要的样式）
+      // target.html 中的 code 样式更简洁，只包含：overflow-x, padding, color, padding-top, background, border-radius, display, font-family, font-size
+      const defaultCodeStyle = 'overflow-x: auto; padding: 16px; color: #abb2bf; padding-top: 15px; background: #282c34; border-radius: 5px; display: -webkit-box; font-family: Consolas, Monaco, Menlo, monospace; font-size: 12px;';
       let codeStyle = '';
       if (newCodeAttrs.includes('style=')) {
         const styleMatch = newCodeAttrs.match(/style=["']([^"']*)["']/);
@@ -134,7 +134,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
       // 行内的其他空格也转换为 &nbsp;
       processedCodeContent = processedCodeContent.replace(/ /g, '&nbsp;');
       
-      // 添加顶部装饰条
+      // 添加顶部装饰条（注意：不要添加 line-height，与 target.html 保持一致）
       const decoratorSpan = '<span style="display: block; background: url(https://files.mdnice.com/user/3441/876cad08-0422-409d-bb5a-08afec5da8ee.svg); height: 30px; width: 100%; background-size: 40px; background-repeat: no-repeat; background-color: #282c34; margin-bottom: -7px; border-radius: 5px; background-position: 10px 10px;"></span>';
       
       return `<pre${newPreAttrs}>${decoratorSpan}<code${newCodeAttrs}>${processedCodeContent}</code>${afterCode}</pre>`;
@@ -155,7 +155,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
     }
   );
   
-  // 5. 为其他元素添加 data-tool 属性（但 pre 标签不需要 data-tool，与 target.html 保持一致）
+  // 5. 为其他元素添加 data-tool 属性（pre 标签也需要 data-tool，与 target.html 保持一致）
   result = result.replace(
     /<(p|ul|ol|blockquote)([^>]*)>/gi,
     (match, tag, attrs) => {
@@ -166,8 +166,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
     }
   );
   
-  // 移除 pre 标签上的 data-tool 属性（与 target.html 保持一致）
-  result = result.replace(/<pre([^>]*)\s+data-tool=["'][^"']*["']([^>]*)>/gi, '<pre$1$2>');
+  // pre 标签的 data-tool 属性已经在代码块处理时添加，不需要移除
   
   // 6. 替换所有 <br/> 为 <br>（与 target.html 保持一致）
   result = result.replace(/<br\/>/g, '<br>');
