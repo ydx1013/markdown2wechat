@@ -222,6 +222,13 @@ export function transformToMdniceFormat(htmlContent: string): string {
         return match;
       }
       
+      // 检查内容是否为空或只有空白字符
+      const trimmedContent = content.trim();
+      if (!trimmedContent) {
+        // 如果内容为空，不创建空的 section，直接返回原内容
+        return `<li${attrs}></li>`;
+      }
+      
       // 用 section 包裹内容
       return `<li${attrs}><section>${content}</section></li>`;
     }
@@ -242,6 +249,17 @@ export function transformToMdniceFormat(htmlContent: string): string {
   
   // 6. 替换所有 <br/> 为 <br>（与 target.html 保持一致）
   result = result.replace(/<br\/>/g, '<br>');
+  
+  // 7. 移除所有空的 <section></section> 标签（避免在微信公众号中显示空白）
+  // 匹配空的 section 标签（可能包含空白字符、换行等）
+  result = result.replace(/<section[^>]*>\s*<\/section>/gi, '');
+  
+  // 8. 移除空的列表项（如果列表项中只有空的 section 或完全为空）
+  // 注意：需要处理可能存在的空白字符和换行
+  result = result.replace(/<li([^>]*)>\s*<\/li>/gi, '');
+  
+  // 9. 移除列表项中只有空白 section 的情况（<li><section></section></li>）
+  result = result.replace(/<li([^>]*)>\s*<section[^>]*>\s*<\/section>\s*<\/li>/gi, '');
   
   return result;
 }

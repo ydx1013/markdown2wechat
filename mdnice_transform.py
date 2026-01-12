@@ -161,6 +161,21 @@ def transform_to_mdnice_format(html_content: str) -> str:
         # 获取列表项的所有内容（包括文本和标签）
         li_contents = list(li.contents)
         
+        # 检查内容是否为空或只有空白字符
+        has_content = False
+        for content in li_contents:
+            if isinstance(content, str):
+                if content.strip():
+                    has_content = True
+                    break
+            else:
+                has_content = True
+                break
+        
+        # 如果内容为空，跳过（不创建空的 section）
+        if not has_content:
+            continue
+        
         # 清空列表项
         li.clear()
         
@@ -171,6 +186,16 @@ def transform_to_mdnice_format(html_content: str) -> str:
             section.append(content)
         
         li.append(section)
+    
+    # 移除所有空的 section 标签（避免在微信公众号中显示空白）
+    for section in soup.find_all('section'):
+        if not section.get_text(strip=True) and not section.find_all():
+            section.decompose()
+    
+    # 移除空的列表项
+    for li in soup.find_all('li'):
+        if not li.get_text(strip=True) and not li.find_all():
+            li.decompose()
     
     # 5. 为其他元素添加 data-tool 属性
     for tag in soup.find_all(['p', 'ul', 'ol', 'blockquote']):
