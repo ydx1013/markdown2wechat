@@ -431,21 +431,78 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
     }
   });
   
-  // 确保代码块内的所有文本都有正确的颜色
-  // 如果代码块内没有语法高亮标签，确保所有文本使用 code 标签的颜色
+  // 确保代码块内的所有文本都有正确的颜色，不受全局样式影响
+  // 全局的 section#nice 可能有 color: rgb(0, 0, 0)，这会影响到代码块内的文本
+  // 我们需要确保代码块内的所有文本都使用 code 标签的颜色
+  // 注意：这个处理必须在所有样式应用之后进行，确保代码块的颜色优先级最高
   $('pre.custom code.hljs').each((_, element) => {
     const $code = $(element);
-    const codeStyle = $code.attr('style') || '';
+    let codeStyle = $code.attr('style') || '';
     const codeColorMatch = codeStyle.match(/color:\s*([^;]+)/);
-    const codeColor = codeColorMatch ? codeColorMatch[1].trim() : '#abb2bf';
+    let codeColor = codeColorMatch ? codeColorMatch[1].trim() : '';
     
-    // 检查是否有直接的文本节点（没有包装在 span 中）
-    // 如果有，确保它们使用正确的颜色
-    // 注意：cheerio 可能已经处理了文本节点，这里主要是确保样式正确
+    // 确保 code 标签本身有明确的颜色（不会被全局样式覆盖）
+    // 如果颜色是黑色或白色，说明可能被全局样式影响了，强制设置为正确的颜色
+    if (!codeColorMatch || codeColor === 'rgb(0, 0, 0)' || codeColor === '#000' || codeColor === 'black' ||
+        codeColor === 'rgb(255, 255, 255)' || codeColor === '#fff' || codeColor === 'white') {
+      // 强制设置为正确的颜色
+      if (codeStyle.includes('color:')) {
+        codeStyle = codeStyle.replace(/color:\s*[^;]+/gi, 'color: #abb2bf');
+      } else {
+        codeStyle = codeStyle ? `${codeStyle}; color: #abb2bf` : 'color: #abb2bf';
+      }
+      $code.attr('style', codeStyle);
+      codeColor = '#abb2bf';
+    } else if (!codeColor) {
+      // 如果没有颜色，设置为默认颜色
+      codeStyle = codeStyle ? `${codeStyle}; color: #abb2bf` : 'color: #abb2bf';
+      $code.attr('style', codeStyle);
+      codeColor = '#abb2bf';
+    }
+    
+    // 处理代码块内的所有子元素
+    // 注意：不要包装文本节点，因为 code 标签的颜色应该已经应用到文本节点了
+    // 只需要确保子元素（如 span）有正确的颜色
+    $code.find('*').each((_, childElement) => {
+      const $child = $(childElement);
+      const childStyle = $child.attr('style') || '';
+      const childColorMatch = childStyle.match(/color:\s*([^;]+)/);
+      const childColor = childColorMatch ? childColorMatch[1].trim() : '';
+      const classes = $child.attr('class') || '';
+      
+      // 如果子元素没有颜色，或者颜色是黑色/白色（可能是继承的），设置正确的颜色
+      // 但对于语法高亮标签（hljs-*），保留它们的颜色（除非颜色被错误覆盖）
+      if (classes.includes('hljs-')) {
+        // 语法高亮标签，如果颜色被错误覆盖为黑色或白色，需要修复
+        if (childColor === 'rgb(0, 0, 0)' || childColor === '#000' || childColor === 'black' ||
+            childColor === 'rgb(255, 255, 255)' || childColor === '#fff' || childColor === 'white') {
+          // 语法高亮标签的颜色被错误覆盖了，移除错误的颜色，让 CSS 中的颜色生效
+          // 但为了确保颜色正确，我们可以移除这个错误的颜色属性
+          const newChildStyle = childStyle.replace(/color:\s*[^;]+;?/gi, '').trim();
+          if (newChildStyle) {
+            $child.attr('style', newChildStyle);
+          } else {
+            $child.removeAttr('style');
+          }
+        }
+      } else {
+        // 不是语法高亮标签，使用 code 标签的颜色
+        if (!childColor || childColor === 'rgb(0, 0, 0)' || childColor === '#000' || childColor === 'black' ||
+            childColor === 'rgb(255, 255, 255)' || childColor === '#fff' || childColor === 'white') {
+          if (childStyle) {
+            const newChildStyle = childStyle.replace(/color:\s*[^;]+/gi, `color: ${codeColor}`);
+            $child.attr('style', newChildStyle);
+          } else {
+            $child.attr('style', `color: ${codeColor}`);
+          }
+        }
+      }
+    });
   });
   
   // 清理 code.hljs 的冗余样式（与 target.html 保持一致）
   // target.html 中的 code 样式只包含：overflow-x, padding, color, padding-top, background, border-radius, display, font-family, font-size
+  // 注意：color 必须明确设置为 #abb2bf，不能被全局样式覆盖
   $('pre.custom code.hljs').each((_, element) => {
     const $code = $(element);
     const style = $code.attr('style') || '';
@@ -476,7 +533,16 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
       }
     });
     
+    // 确保 color 是正确的值（不能被全局样式覆盖）
+    // 如果 color 是黑色或白色，强制设置为正确的颜色
+    const currentColor = styleObj['color'] || '';
+    if (!currentColor || currentColor === 'rgb(0, 0, 0)' || currentColor === '#000' || currentColor === 'black' ||
+        currentColor === 'rgb(255, 255, 255)' || currentColor === '#fff' || currentColor === 'white') {
+      styleObj['color'] = '#abb2bf';
+    }
+    
     // 重新组合样式（按 target.html 的顺序）
+    // 注意：color 放在前面，确保优先级
     const cleanedStyle = [
       `overflow-x: ${styleObj['overflow-x'] || 'auto'}`,
       `padding: ${styleObj['padding'] || '16px'}`,
@@ -490,6 +556,46 @@ export function applyInlineStyles(htmlContent: string, cssText: string): string 
     ].join('; ');
     
     $code.attr('style', cleanedStyle);
+  });
+  
+  // 最后一步：确保代码块的颜色正确（在所有样式应用之后）
+  // 这是最后的后处理步骤，确保代码块的颜色不会被全局样式覆盖
+  $('pre.custom code.hljs').each((_, element) => {
+    const $code = $(element);
+    let codeStyle = $code.attr('style') || '';
+    
+    // 强制确保 code 标签有正确的颜色（优先级最高）
+    // 移除任何可能的黑色或白色颜色，强制设置为 #abb2bf
+    if (codeStyle.includes('color:')) {
+      codeStyle = codeStyle.replace(/color:\s*[^;]+/gi, 'color: #abb2bf');
+    } else {
+      codeStyle = codeStyle ? `${codeStyle}; color: #abb2bf` : 'color: #abb2bf';
+    }
+    $code.attr('style', codeStyle);
+    
+    // 确保代码块内的所有子元素（非语法高亮标签）也有正确的颜色
+    $code.find('*').each((_, childElement) => {
+      const $child = $(childElement);
+      const classes = $child.attr('class') || '';
+      
+      // 跳过语法高亮标签（hljs-*），它们有自己的颜色
+      if (!classes.includes('hljs-')) {
+        const childStyle = $child.attr('style') || '';
+        const childColorMatch = childStyle.match(/color:\s*([^;]+)/);
+        const childColor = childColorMatch ? childColorMatch[1].trim() : '';
+        
+        // 如果子元素没有颜色，或者是黑色/白色，设置为正确的颜色
+        if (!childColor || childColor === 'rgb(0, 0, 0)' || childColor === '#000' || childColor === 'black' ||
+            childColor === 'rgb(255, 255, 255)' || childColor === '#fff' || childColor === 'white') {
+          if (childStyle) {
+            const newChildStyle = childStyle.replace(/color:\s*[^;]+/gi, 'color: #abb2bf');
+            $child.attr('style', newChildStyle);
+          } else {
+            $child.attr('style', 'color: #abb2bf');
+          }
+        }
+      }
+    });
   });
   
   // 获取结果
