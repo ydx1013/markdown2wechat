@@ -78,6 +78,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
   }
 
   // 3. 处理代码块 - 转换为 pre.custom 格式
+  // 重要：只处理 <pre> 标签内的内容，不要包含外部内容
   $('pre').each((_, element) => {
     const $pre = $(element);
     
@@ -99,15 +100,31 @@ export function transformToMdniceFormat(htmlContent: string): string {
     const existingPreStyle = $pre.attr('style') || '';
     $pre.attr('style', existingPreStyle ? `${existingPreStyle}; ${defaultPreStyle}` : defaultPreStyle);
     
-    // 查找 code 标签
-    const $code = $pre.find('code').first();
+    // 查找 code 标签（只查找直接子元素，不查找嵌套的 code）
+    const $code = $pre.children('code').first();
     if ($code.length === 0) {
-      // 如果没有 code 标签，创建一个
-      const codeText = $pre.text();
-      $pre.empty();
-      const $newCode = $('<code>').addClass('hljs').text(codeText);
-      $pre.append($newCode);
-      processCodeContent($newCode);
+      // 如果没有 code 标签，尝试查找所有 code（可能是嵌套的）
+      const $codeAny = $pre.find('code').first();
+      if ($codeAny.length === 0) {
+        // 如果完全没有 code 标签，创建一个
+        const codeText = $pre.text();
+        $pre.empty();
+        const $newCode = $('<code>').addClass('hljs').text(codeText);
+        $pre.append($newCode);
+        processCodeContent($newCode);
+      } else {
+        // 使用找到的 code 标签
+        $codeAny.removeClass().addClass('hljs');
+        const defaultCodeStyle = 'overflow-x: auto; padding: 16px; color: #abb2bf; padding-top: 15px; background: #282c34; border-radius: 5px; display: -webkit-box; font-family: Consolas, Monaco, Menlo, monospace; font-size: 12px;';
+        const existingCodeStyle = $codeAny.attr('style') || '';
+        let cleanedStyle = existingCodeStyle
+          .replace(/color:\s*\d+px[^;]*;/gi, '')
+          .replace(/background:\s*\d+px[^;]*;/gi, '');
+        $codeAny.attr('style', cleanedStyle ? `${cleanedStyle}; ${defaultCodeStyle}` : defaultCodeStyle);
+        processCodeContent($codeAny);
+        const decoratorSpan = $('<span>').attr('style', 'display: block; background: url(https://files.mdnice.com/user/3441/876cad08-0422-409d-bb5a-08afec5da8ee.svg); height: 30px; width: 100%; background-size: 40px; background-repeat: no-repeat; background-color: #282c34; margin-bottom: -7px; border-radius: 5px; background-position: 10px 10px;');
+        $pre.prepend(decoratorSpan);
+      }
     } else {
       // 确保 code 有 hljs 类
       $code.removeClass().addClass('hljs');
@@ -123,7 +140,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
       
       $code.attr('style', cleanedStyle ? `${cleanedStyle}; ${defaultCodeStyle}` : defaultCodeStyle);
       
-      // 处理代码内容
+      // 处理代码内容（只处理 <code> 标签内的内容）
       processCodeContent($code);
       
       // 添加顶部装饰条
@@ -206,8 +223,20 @@ export function transformToMdniceFormat(htmlContent: string): string {
  * 只有实际的换行符才应该转换为 <br>
  */
 function processCodeContent($code: cheerio.Cheerio<any>): void {
+  // 重要：只处理 <code> 标签内的直接内容
   // 获取代码的原始 HTML 内容（可能包含语法高亮标签）
+  // 注意：$code.html() 只会获取 <code> 标签内的内容，不会包含外部内容
   const originalHtml = $code.html() || '';
+  
+  // 如果 originalHtml 为空，尝试获取文本内容
+  if (!originalHtml) {
+    const text = $code.text();
+    if (text) {
+      const processed = processCodeText(text);
+      $code.html(processed);
+    }
+    return;
+  }
   
   // 检查是否包含 HTML 标签（语法高亮）
   const hasHtmlTags = /<[^>]+>/.test(originalHtml);
