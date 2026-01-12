@@ -28,6 +28,10 @@ export function listThemeNames(): string[] {
 
 export function getDefaultThemeName(): string | null {
   const names = listThemeNames();
+  // 优先使用"兰青"主题
+  if (names.includes('兰青')) {
+    return '兰青';
+  }
   return names.length > 0 ? names[0] : null;
 }
 
