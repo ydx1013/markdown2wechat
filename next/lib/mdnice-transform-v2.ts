@@ -11,10 +11,7 @@
 import * as cheerio from 'cheerio';
 
 export function transformToMdniceFormat(htmlContent: string): string {
-  const $ = cheerio.load(htmlContent, {
-    decodeEntities: false, // 保持 HTML 实体不变
-    xml: false,
-  });
+  const $ = cheerio.load(htmlContent);
 
   // 1. 转换外层容器 <div id="nice"> -> <section id="nice" data-tool="mdnice编辑器" data-website="https://www.mdnice.com">
   $('#nice').each((_, element) => {
@@ -205,7 +202,7 @@ function processCodeContent($code: cheerio.Cheerio<cheerio.Element>): void {
   if (hasHtmlTags) {
     // 如果已经有 HTML 标签（语法高亮），需要保护它们
     // 使用 cheerio 解析，然后处理文本节点
-    const $temp = cheerio.load(originalHtml, { decodeEntities: false });
+    const $temp = cheerio.load(originalHtml);
     
     // 处理所有文本节点
     $temp('*').contents().each((_, node) => {
