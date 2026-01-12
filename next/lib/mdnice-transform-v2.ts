@@ -312,6 +312,13 @@ export function transformToMdniceFormat(htmlContent: string): string {
   // 替换 <br/> 为 <br>
   result = result.replace(/<br\s*\/>/gi, '<br>');
   
+  // 7. 移除 <ol> 和 <ul> 标签后的换行符，确保第一个 <li> 紧跟在 <ol> 或 <ul> 后面
+  // 这样可以避免微信公众号将换行符解析为空白列表项
+  // 移除 <ol> 或 <ul> 标签后的空白字符（换行、空格、制表符等），直到遇到 <li>
+  result = result.replace(/(<(?:ol|ul)[^>]*>)\s+(<li)/gi, '$1$2');
+  // 移除 </li> 和下一个 <li> 之间的换行符（但保留空格，因为可能有其他内容）
+  result = result.replace(/(<\/li>)\s+(<li)/gi, '$1$2');
+  
   return result;
 }
 

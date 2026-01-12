@@ -208,5 +208,13 @@ def transform_to_mdnice_format(html_content: str) -> str:
     # 替换所有 <br/> 为 <br>（与 target.html 保持一致）
     result = result.replace('<br/>', '<br>')
     
+    # 7. 移除 <ol> 和 <ul> 标签后的换行符，确保第一个 <li> 紧跟在 <ol> 或 <ul> 后面
+    # 这样可以避免微信公众号将换行符解析为空白列表项
+    import re
+    # 移除 <ol> 或 <ul> 标签后的空白字符（换行、空格、制表符等），直到遇到 <li>
+    result = re.sub(r'(<(?:ol|ul)[^>]*>)\s+(<li)', r'\1\2', result)
+    # 移除 </li> 和下一个 <li> 之间的换行符（但保留空格，因为可能有其他内容）
+    result = re.sub(r'(</li>)\s+(<li)', r'\1\2', result)
+    
     return result
 
