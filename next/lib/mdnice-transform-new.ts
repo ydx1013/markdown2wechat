@@ -137,6 +137,24 @@ export function transformToMdniceFormat(htmlContent: string): string {
     }
   });
 
+  // 额外一层安全兜底：如果某个列表（ol/ul）的最后一个 li 为空，也移除
+  $("ol, ul").each((_, listEl) => {
+    const $list = $(listEl);
+    const $lastLi = $list.children("li").last();
+    if ($lastLi.length === 0) return;
+
+    const text = $lastLi.text().trim();
+    const html = ($lastLi.html() || "").trim();
+    const htmlStripped = html
+      .replace(/<br\s*\/?>/gi, "")
+      .replace(/&nbsp;/gi, "")
+      .replace(/\s+/g, "");
+
+    if (!text && !htmlStripped) {
+      $lastLi.remove();
+    }
+  });
+
   // 5. 为其他元素添加 data-tool 属性
   $("p, ul, ol, blockquote, hr").each((_, element) => {
     const $el = $(element);
