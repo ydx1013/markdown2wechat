@@ -30,50 +30,39 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   highlight: function (str: string, lang: string) {
-    // 统一将所有代码块都当作 bash 处理（用户要求）
-    // 这样可以避免某些语言格式导致的解析问题
-    const normalizedLang = lang ? 'bash' : '';
-    
-    // 如果指定了语言，尝试进行语法高亮
-    if (normalizedLang && hljsInstance) {
+    // 按照 markdown 中声明的语言做高亮；如果不支持则优雅回退
+    if (hljsInstance) {
+      // 1. 优先使用显式声明的语言
+      if (lang) {
+        try {
+          const hasGetLanguage = typeof hljsInstance.getLanguage === "function";
+          if (!hasGetLanguage || hljsInstance.getLanguage(lang)) {
+            if (typeof hljsInstance.highlight === "function") {
+              const result: any = hljsInstance.highlight(str, { language: lang, ignoreIllegals: true } as any);
+              if (result && result.value) {
+                return result.value;
+              }
+            }
+          }
+        } catch {
+          // 忽略单次高亮错误，后面继续尝试自动检测或转义
+        }
+      }
+
+      // 2. 如果没有语言或失败，尝试自动检测
       try {
-        // highlight.js 11.x 的 API
-        let result: any = null;
-        
-        // 方法1: 使用新的 API (highlight.js 11.x+)
-        if (typeof hljsInstance.highlight === "function") {
-          try {
-            result = hljsInstance.highlight(str, { language: normalizedLang });
-          } catch (e) {
-            // 如果失败，尝试其他方法
+        if (typeof hljsInstance.highlightAuto === "function") {
+          const autoResult: any = hljsInstance.highlightAuto(str);
+          if (autoResult && autoResult.value) {
+            return autoResult.value;
           }
         }
-        
-        // 方法2: 如果方法1失败，尝试使用旧的 API (highlight.js 10.x)
-        if (!result && typeof hljsInstance.highlight === "function") {
-          try {
-            result = hljsInstance.highlight(normalizedLang, str);
-          } catch (e) {
-            // 继续尝试
-          }
-        }
-        
-        // 如果成功高亮，返回结果
-        if (result && result.value) {
-          // markdown-it 的 highlight 函数只需要返回 <code> 标签内的内容
-          // markdown-it 会自动添加 <pre><code> 标签
-          // highlight.js 的输出已经包含了 HTML 标签（如 <span class="hljs-comment">）
-          // 这些标签会被后续的 processCodeContent 正确处理（保留结构，只处理文本节点）
-          return result.value;
-        }
-      } catch (err) {
-        // 如果高亮失败，返回默认的转义代码
-        console.warn('代码高亮失败:', err);
+      } catch {
+        // 忽略自动检测错误，落回纯文本
       }
     }
-    
-    // 如果没有指定语言或不支持，返回默认的转义代码
-    // markdown-it 会自动添加 <pre><code> 标签
+
+    // 3. 最后回退到纯文本转义
     return escapeHtml(str);
   },
 });
