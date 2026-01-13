@@ -22,6 +22,10 @@
 2. 进入 `next` 目录，Vercel 会自动识别 Next.js 项目
 3. 部署完成后即可使用
 
+### 在线体验地址
+
+- 已部署示例：`https://md2wechat.not404.net`
+
 ### 本地开发
 
 ```bash
