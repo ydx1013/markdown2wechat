@@ -132,6 +132,56 @@ async def convert_markdown(request: MarkdownRequest):
         )
 
         html_content = md.convert(request.markdown)
+        
+        # 重要：修复 markdown 可能解析错误的代码块
+        # 使用 DOM 操作而不是正则表达式
+        from bs4 import BeautifulSoup, Tag, NavigableString
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # 检查并修复所有 <pre> 标签
+        for pre in soup.find_all('pre'):
+            first_code = pre.find('code')
+            invalid_elements = pre.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ol', 'ul', 'table', 'blockquote', 'hr', 'p'])
+            
+            if invalid_elements and first_code:
+                # 检查第一个无效元素是否在第一个 code 标签之后
+                found_invalid_after_code = False
+                found_code = False
+                
+                # 遍历所有子节点
+                for child in pre.children:
+                    if child == first_code:
+                        found_code = True
+                    elif found_code and isinstance(child, Tag):
+                        tag_name = child.name.lower()
+                        if tag_name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ol', 'ul', 'table', 'blockquote', 'hr', 'p']:
+                            found_invalid_after_code = True
+                            break
+                
+                if found_invalid_after_code:
+                    # 代码块包含了后续内容，需要修复
+                    # 只保留到第一个 code 标签结束的内容
+                    code_clone = BeautifulSoup(str(first_code), 'html.parser').find('code')
+                    pre.clear()
+                    if code_clone:
+                        pre.append(code_clone)
+        
+        # 清理 markdown 可能生成的空列表项（使用 DOM 操作）
+        for li in soup.find_all('li'):
+            text_content = li.get_text(strip=True)
+            html_content_str = (str(li.decode_contents()) if hasattr(li, 'decode_contents') else '').strip()
+            
+            # 如果列表项为空（没有文本、HTML 为空），移除它
+            if not text_content and not html_content_str:
+                li.decompose()
+        
+        html_content = str(soup)
+        
+        # 修复 BeautifulSoup 可能添加的额外标签
+        if '<html>' in html_content:
+            body_match = BeautifulSoup(html_content, 'html.parser').find('body')
+            if body_match:
+                html_content = str(body_match.decode_contents()) if hasattr(body_match, 'decode_contents') else ''
 
         # 转换为 mdnice 格式
         html_content = transform_to_mdnice_format(f'<div id="nice">{html_content}</div>')
