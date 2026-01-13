@@ -1,249 +1,235 @@
-# 🚀 手把手教你安装与测试 n8n：自动化工作流从此开始
+# n8n 部署与调优指南
 
-> 自动化是现代工作流程的核心，而 n8n 作为一款开源的工作流自动化工具，正受到越来越多开发者和企业的青睐。本文将带你从零开始，完成 n8n 的安装与基础测试。
+## 📋 部署方式对比
 
----
-
-## 📋 目录
-1. [什么是 n8n？](#什么是-n8n)
-2. [安装前准备](#安装前准备)
-3. [安装方法对比](#安装方法对比)
-4. [详细安装步骤](#详细安装步骤)
-5. [基础功能测试](#基础功能测试)
-6. [常见问题解决](#常见问题解决)
-7. [总结与建议](#总结与建议)
-
----
-
-## 什么是 n8n？
-
-**n8n** 是一个基于节点的开源工作流自动化工具，它允许你通过可视化界面连接不同的应用程序和服务。与 Zapier 或 IFTTT 类似，但 n8n 提供了更高的灵活性和控制权。
-
-### ✨ 主要特点：
-- ✅ **完全开源** - 可自行部署，无使用限制
-- ✅ **自托管** - 数据完全掌握在自己手中
-- ✅ **丰富的节点库** - 支持 200+ 应用和服务
-- ✅ **可视化编辑器** - 拖拽式界面，易于使用
-
----
-
-## 安装前准备
-
-### 系统要求
-| 项目 | 最低要求 | 推荐配置 |
-|------|----------|----------|
-| 操作系统 | Ubuntu 18.04+ / CentOS 7+ | Ubuntu 20.04+ |
-| 内存 | 2 GB RAM | 4 GB RAM 或更高 |
-| 存储 | 10 GB 可用空间 | 20 GB 或更高 |
-| Node.js | 版本 14.x 或更高 | 版本 16.x |
-
-### 📦 必要组件检查
+### 1. **Docker 部署**（推荐）
 ```bash
-# 检查 Node.js 版本
-node --version
-
-# 检查 npm 版本
-npm --version
-
-# 检查 Docker（如果使用 Docker 安装）
-docker --version
-```
-
----
-
-## 安装方法对比
-
-### 方法选择指南
-1. **Docker 安装** - 最简单快捷，适合大多数用户
-2. **npm 安装** - 适合开发者，更灵活
-3. **二进制包安装** - 适合生产环境
-
-> 💡 **建议**：初次使用者推荐使用 Docker 安装，避免环境配置问题。
-
----
-
-## 详细安装步骤
-
-### 方法一：使用 Docker 安装（推荐）
-
-#### 步骤 1：安装 Docker
-```bash
-# 更新系统包
-sudo apt update && sudo apt upgrade -y
-
-# 安装 Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# 启动 Docker 服务
-sudo systemctl start docker
-sudo systemctl enable docker
-```
-
-#### 步骤 2：拉取 n8n Docker 镜像
-```bash
-# 拉取最新版 n8n 镜像
-docker pull n8nio/n8n
-
-# 查看已下载的镜像
-docker images | grep n8n
-```
-
-#### 步骤 3：运行 n8n 容器
-```bash
+# 基础部署
 docker run -it --rm \n  --name n8n \n  -p 5678:5678 \n  -v ~/.n8n:/home/node/.n8n \n  n8nio/n8n
+
+# 生产环境配置
+docker run -d \n  --name n8n \n  -p 5678:5678 \n  -v n8n_data:/home/node/.n8n \n  -e N8N_PROTOCOL=https \n  -e N8N_HOST=your-domain.com \n  -e N8N_PORT=5678 \n  -e WEBHOOK_URL=https://your-domain.com/ \n  n8nio/n8n
 ```
 
-**参数说明：**
-- `-p 5678:5678`：将容器端口映射到主机
-- `-v ~/.n8n:/home/node/.n8n`：持久化数据存储
-- `--name n8n`：容器名称
+### 2. **Docker Compose 部署**
+```yaml
+version: '3.8'
 
-### 方法二：使用 npm 安装
+services:
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PROTOCOL=https
+      - N8N_HOST=your-domain.com
+      - N8N_PORT=5678
+      - WEBHOOK_URL=https://your-domain.com/
+      - N8N_ENCRYPTION_KEY=your-encryption-key
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+    volumes:
+      - n8n_data:/home/node/.n8n
 
-#### 步骤 1：安装 Node.js 和 npm
+volumes:
+  n8n_data:
+```
+
+### 3. **Kubernetes 部署**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+      - name: n8n
+        image: n8nio/n8n
+        ports:
+        - containerPort: 5678
+        env:
+        - name: N8N_PROTOCOL
+          value: "https"
+        - name: N8N_HOST
+          value: "your-domain.com"
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-pvc
+```
+
+## ⚡ 性能调优配置
+
+### **环境变量优化**
 ```bash
-# 使用 NodeSource 仓库安装 Node.js
-curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-sudo apt install -y nodejs
+# 内存与执行限制
+NODE_OPTIONS="--max-old-space-size=2048"
+EXECUTIONS_PROCESS=main
+EXECUTIONS_TIMEOUT=3600
+EXECUTIONS_DATA_PRUNE=true
+EXECUTIONS_DATA_MAX_AGE=168  # 保留7天数据
 
-# 验证安装
-node --version  # 应显示 v16.x.x
-npm --version   # 应显示 8.x.x
+# 数据库配置（使用外部数据库提升性能）
+DB_TYPE=postgresdb
+DB_POSTGRESDB_HOST=your-postgres-host
+DB_POSTGRESDB_PORT=5432
+DB_POSTGRESDB_DATABASE=n8n
+DB_POSTGRESDB_USER=n8n
+DB_POSTGRESDB_PASSWORD=your-password
+
+# 队列处理
+QUEUE_BULL_REDIS_HOST=your-redis-host
+QUEUE_BULL_REDIS_PORT=6379
+QUEUE_BULL_REDIS_PASSWORD=your-redis-password
 ```
 
-#### 步骤 2：安装 n8n
+### **Nginx 反向代理配置**
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://localhost:5678;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 超时设置
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+## 🔧 高级调优技巧
+
+### **1. 数据库优化**
+```sql
+-- PostgreSQL 优化
+ALTER DATABASE n8n SET maintenance_work_mem = '256MB';
+ALTER DATABASE n8n SET work_mem = '32MB';
+ALTER DATABASE n8n SET shared_buffers = '512MB';
+
+-- 创建索引加速查询
+CREATE INDEX idx_executions_created_at ON executions(createdAt);
+CREATE INDEX idx_workflow_updated_at ON workflow_entity(updatedAt);
+```
+
+### **2. Redis 队列配置**
+```javascript
+// n8n 配置中使用 Redis 作为队列后端
+export default {
+  queue: {
+    healthCheckActive: true,
+    bull: {
+      redis: {
+        host: 'redis-host',
+        port: 6379,
+        password: 'your-password',
+        db: 0,
+        keyPrefix: 'n8n:'
+      }
+    }
+  }
+}
+```
+
+### **3. 执行策略优化**
 ```bash
-# 全局安装 n8n
-sudo npm install n8n -g
+# 并发控制
+EXECUTIONS_PROCESS=main
+EXECUTIONS_TIMEOUT=7200
+EXECUTIONS_DATA_PRUNE=true
+EXECUTIONS_DATA_MAX_AGE=72  # 保留3天数据
+EXECUTIONS_DATA_PRUNE_TIMEOUT=3600
 
-# 或者使用 npx（无需安装）
-npx n8n
+# 内存管理
+N8N_METRICS=true
+N8N_DIAGNOSTICS_ENABLED=true
 ```
 
-#### 步骤 3：启动 n8n
+## 📊 监控与维护
+
+### **健康检查端点**
+```
+GET /healthz
+GET /metrics  # 需要启用 N8N_METRICS=true
+```
+
+### **日志配置**
 ```bash
-# 直接启动
-n8n start
+# 日志级别设置
+N8N_LOG_LEVEL=info  # debug, info, warn, error
+N8N_LOG_OUTPUT=console
+N8N_DIAGNOSTICS_ENABLED=true
 
-# 使用自定义端口启动
-n8n start --port=5678
+# 日志轮转（使用 Docker 时）
+docker run ... \n  --log-opt max-size=10m \n  --log-opt max-file=3
 ```
+
+### **备份策略**
+```bash
+# 数据库备份
+pg_dump -h localhost -U n8n n8n > n8n_backup_$(date +%Y%m%d).sql
+
+# 工作流备份
+docker exec n8n tar -czf /tmp/n8n_backup.tar.gz /home/node/.n8n
+docker cp n8n:/tmp/n8n_backup.tar.gz .
+```
+
+## 🚀 生产环境最佳实践
+
+1. **使用外部数据库**：避免使用 SQLite，改用 PostgreSQL
+2. **启用 HTTPS**：配置正确的 SSL 证书
+3. **设置备份策略**：定期备份数据库和工作流
+4. **监控资源使用**：设置内存和 CPU 限制
+5. **配置适当的超时**：根据工作流复杂度调整
+6. **启用执行数据清理**：避免数据库膨胀
+7. **使用队列系统**：Redis 提升并发处理能力
+8. **设置访问控制**：配置用户认证和权限
+
+## 🔍 故障排除
+
+### **常见问题解决**
+```bash
+# 检查服务状态
+docker logs n8n --tail 100
+
+# 检查数据库连接
+docker exec n8n node -e "require('pg').Client"
+
+# 重置管理员密码
+docker exec n8n n8n user:reset --email=admin@example.com
+```
+
+### **性能问题排查**
+1. 检查数据库连接数
+2. 监控内存使用情况
+3. 分析慢查询日志
+4. 检查队列积压情况
+5. 验证网络延迟
 
 ---
 
-## 基础功能测试
-
-### 测试 1：访问 Web 界面
-1. 打开浏览器，访问 `http://localhost:5678`
-2. 你应该看到 n8n 的登录/注册页面
-3. 首次使用需要创建管理员账户
-
-### 测试 2：创建第一个工作流
-
-#### 📝 示例：HTTP 请求测试工作流
-1. **添加 HTTP Request 节点**
-   - 从节点面板拖拽 "HTTP Request" 节点到画布
-   - 配置 URL：`https://jsonplaceholder.typicode.com/posts/1`
-
-2. **添加 Debug 节点**
-   - 连接 HTTP Request 节点到 Debug 节点
-   - 用于查看请求结果
-
-3. **执行工作流**
-   ```javascript
-   // 预期返回的数据结构
-   {
-     "userId": 1,
-     "id": 1,
-     "title": "...",
-     "body": "..."
-   }
-   ```
-
-### 测试 3：触发器测试
-1. **添加 Schedule 节点**
-   - 配置为每分钟触发一次
-2. **添加 Code 节点**
-   ```javascript
-   // 简单的 JavaScript 代码
-   const now = new Date();
-   return {
-     timestamp: now.toISOString(),
-     message: "定时任务执行成功！"
-   };
-   ```
-
-### 📊 测试结果记录表
-| 测试项目 | 预期结果 | 实际结果 | 状态 |
-|----------|----------|----------|------|
-| Web 界面访问 | 显示登录页面 | ✅ 正常显示 | 通过 |
-| HTTP 请求 | 返回 JSON 数据 | ✅ 数据完整 | 通过 |
-| 定时触发器 | 每分钟执行 | ✅ 按时执行 | 通过 |
-| 数据持久化 | 重启后数据保留 | ✅ 数据完整 | 通过 |
-
----
-
-## 常见问题解决
-
-### ❗ 问题 1：端口被占用
-```bash
-# 查看占用 5678 端口的进程
-sudo lsof -i :5678
-
-# 终止占用进程
-sudo kill -9 <PID>
-```
-
-### ❗ 问题 2：Docker 容器启动失败
-```bash
-# 查看容器日志
-docker logs n8n
-
-# 常见解决方案
-# 1. 检查端口冲突
-# 2. 检查卷挂载权限
-# 3. 确保有足够内存
-```
-
-### ❗ 问题 3：npm 安装权限问题
-```bash
-# 使用 nvm 管理 Node.js 版本
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-
-# 重新安装 Node.js
-nvm install 16
-nvm use 16
-```
-
----
-
-## 总结与建议
-
-### ✅ 安装成功标志
-1. 能够通过浏览器访问 n8n 界面
-2. 可以创建和执行简单的工作流
-3. 数据能够正确持久化保存
-
-### 🎯 下一步建议
-1. **探索更多节点**：尝试连接 Slack、Google Sheets 等常用服务
-2. **学习表达式**：掌握 n8n 的表达式系统，实现更复杂的逻辑1
-3. **设置备份**：定期备份工作流配置
-4. **安全配置**：设置 HTTPS、防火墙规则等安全措施
-
-### 📚 学习资源
-- [官方文档](https://docs.n8n.io)
-- [社区论坛](https://community.n8n.io)
-- [GitHub 仓库](https://github.com/n8n-io/n8n)
-
----
-
-> 💎 **提示**：n8n 的强大之处在于其灵活性和可扩展性。从简单的工作流开始，逐步构建复杂的自动化流程，你会发现它能够显著提升工作效率。
-
----
-
-**最后更新**：2024年  
-**适用版本**：n8n 0.200+  
-**测试环境**：Ubuntu 22.04, Docker 20.10, Node.js 16.x
-
-希望这篇指南能帮助你顺利安装和测试 n8n！如果在安装过程中遇到任何问题，欢迎查阅官方文档或社区论坛获取帮助。🚀
+**提示**：部署前请根据实际需求调整配置参数，建议先在测试环境验证配置后再部署到生产环境。

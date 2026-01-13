@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 /**
  * 将 HTML 转换为 mdnice 编辑器格式
  * 参考官方示例：Markdown _ 让排版变 Nice.html
- * 确保代码高亮正常工作
+ * 完全使用 DOM 操作，不使用正则表达式
  */
 export function transformToMdniceFormat(htmlContent: string): string {
   const $ = cheerio.load(htmlContent, {
@@ -43,10 +43,14 @@ export function transformToMdniceFormat(htmlContent: string): string {
     $heading.attr("data-tool", "mdnice编辑器");
   });
 
-  // 3. 处理代码块 - 关键：保留 highlight.js 生成的 HTML 结构
+  // 3. 处理代码块 - 关键：保留 highlight.js 生成的 HTML 结构，正确处理换行
   $("pre").each((_, element) => {
     const $pre = $(element);
     const $firstCode = $pre.find("code").first();
+
+    if ($firstCode.length === 0) {
+      return;
+    }
 
     // 检查并修复代码块：如果 <pre> 中包含无效的块级元素（在 <code> 之后），需要修复
     let foundInvalidAfterCode = false;
@@ -79,7 +83,7 @@ export function transformToMdniceFormat(htmlContent: string): string {
     // 确保 code 元素有 hljs 类
     $pre.find("code").addClass("hljs");
 
-    // 处理代码内容：保留 highlight.js 的 HTML 结构，只处理文本节点
+    // 处理代码内容：保留 highlight.js 的 HTML 结构，正确处理换行和空格
     $pre.find("code").each((_, codeElement) => {
       processCodeContent($(codeElement));
     });
@@ -96,6 +100,17 @@ export function transformToMdniceFormat(htmlContent: string): string {
   // 4. 处理列表项：用 <section> 包裹内容，并清理空项
   $("li").each((_, element) => {
     const $li = $(element);
+    
+    // 检查内容是否为空（包括只有空白字符的情况）
+    const textContent = $li.text().trim();
+    const htmlContent = ($li.html() || "").trim();
+    
+    // 如果内容为空，标记为删除
+    if (!textContent && !htmlContent) {
+      $li.attr("data-empty", "true");
+      return;
+    }
+
     const $section = $li.find("section").first();
 
     if ($section.length === 0) {
@@ -122,6 +137,9 @@ export function transformToMdniceFormat(htmlContent: string): string {
     });
   });
 
+  // 移除标记为空的 li
+  $("li[data-empty='true']").remove();
+
   // 清理空的 li（包括只包含 <br> 或 &nbsp; 的情况）
   $("li").each((_, element) => {
     const $li = $(element);
@@ -137,24 +155,6 @@ export function transformToMdniceFormat(htmlContent: string): string {
     }
   });
 
-  // 额外一层安全兜底：如果某个列表（ol/ul）的最后一个 li 为空，也移除
-  $("ol, ul").each((_, listEl) => {
-    const $list = $(listEl);
-    const $lastLi = $list.children("li").last();
-    if ($lastLi.length === 0) return;
-
-    const text = $lastLi.text().trim();
-    const html = ($lastLi.html() || "").trim();
-    const htmlStripped = html
-      .replace(/<br\s*\/?>/gi, "")
-      .replace(/&nbsp;/gi, "")
-      .replace(/\s+/g, "");
-
-    if (!text && !htmlStripped) {
-      $lastLi.remove();
-    }
-  });
-
   // 5. 为其他元素添加 data-tool 属性
   $("p, ul, ol, blockquote, hr").each((_, element) => {
     const $el = $(element);
@@ -163,11 +163,35 @@ export function transformToMdniceFormat(htmlContent: string): string {
     }
   });
 
-  // 6. 格式化列表：移除多余的空白
+  // 6. 格式化列表：移除 <ol>/<ul> 和 <li> 之间的空白，以及 <li> 之间的空白
+  // 这样可以避免微信公众号将换行符解析为空白列表项
   $("ol, ul").each((_, element) => {
     const $list = $(element);
-    const html = $list.html() || "";
-    $list.html(html.replace(/^\s+/, "").replace(/>\s+</g, "><"));
+    const children = $list.children("li").toArray();
+    
+    if (children.length === 0) {
+      return;
+    }
+
+    // 移除列表标签和第一个 li 之间的空白
+    const firstLi = children[0];
+    if (firstLi.prev && firstLi.prev.type === "text") {
+      const prevText = firstLi.prev.data || "";
+      if (prevText.trim() === "") {
+        $(firstLi.prev).remove();
+      }
+    }
+
+    // 移除 li 之间的空白
+    for (let i = 1; i < children.length; i++) {
+      const li = children[i];
+      if (li.prev && li.prev.type === "text") {
+        const prevText = li.prev.data || "";
+        if (prevText.trim() === "") {
+          $(li.prev).remove();
+        }
+      }
+    }
   });
 
   // 7. 统一 <br/> 为 <br>
@@ -196,12 +220,17 @@ export function transformToMdniceFormat(htmlContent: string): string {
     result = $nice.parent().html() || result;
   }
 
+  // 最后清理：移除 <ol>/<ul> 和 <li> 之间的换行符（字符串级别）
+  result = result.replace(/(<(?:ol|ul)[^>]*>)\s+(<li)/gi, "$1$2");
+  result = result.replace(/(<\/li>)\s+(<li)/gi, "$1$2");
+  result = result.replace(/(<\/li>)\s+(<\/(?:ol|ul)>)/gi, "$1$2");
+
   return result;
 }
 
 /**
  * 处理代码块内容
- * 关键：保留 highlight.js 生成的 HTML 标签结构，只处理纯文本节点
+ * 关键：保留 highlight.js 生成的 HTML 标签结构，正确处理换行和空格
  */
 function processCodeContent($code: cheerio.Cheerio<any>): void {
   const originalHtml = $code.html() || "";
@@ -236,7 +265,7 @@ function processTextNodesRecursive(node: any, $: cheerio.CheerioAPI): void {
   if (node.type === "text") {
     // 只处理纯文本节点
     const text = node.data || "";
-    if (text.trim()) {
+    if (text) {
       // 处理文本：换行转 <br>，空格转 &nbsp;
       const processed = processCodeText(text);
       
@@ -258,6 +287,8 @@ function processTextNodesRecursive(node: any, $: cheerio.CheerioAPI): void {
         } else {
           node.data = processed;
         }
+      } else {
+        node.data = processed;
       }
     }
   } else if (node.children && Array.isArray(node.children)) {
@@ -271,26 +302,33 @@ function processTextNodesRecursive(node: any, $: cheerio.CheerioAPI): void {
 
 /**
  * 处理代码文本
- * - 实际的换行符转换为 <br>
+ * - 实际的换行符（\n）转换为 <br>
+ * - 字面量的 \n（反斜杠+n）也转换为 <br>（因为在 markdown 中，\n 在代码块中应该被当作换行）
  * - 空格转换为 &nbsp;
- * - 字面量的 \n 保持不变（使用占位符）
  */
 function processCodeText(text: string): string {
   if (!text) return text;
 
-  // 先处理字面量的 \n（在 markdown 源码中写的是 \n）
-  // 使用占位符保护它们
-  const literalNewlinePlaceholder = "___LITERAL_NEWLINE___";
-  text = text.replace(/\\n/g, literalNewlinePlaceholder);
+  // 处理字面量的 \n（反斜杠+n）：在 markdown 代码块中，\n 应该被转换为换行
+  // 但要注意：如果 \n 前面有反斜杠转义（\\n），则应该保持为字面量
+  // 这里我们简化处理：所有的 \n（不是 \\n）都转换为换行
+  let processed = text;
+  
+  // 先保护已经转义的 \\n
+  const escapedNewlinePlaceholder = "___ESCAPED_NEWLINE___";
+  processed = processed.replace(/\\\\n/g, escapedNewlinePlaceholder);
+  
+  // 将字面量的 \n 转换为实际的换行符（这样后面可以统一处理）
+  processed = processed.replace(/\\n/g, "\n");
+  
+  // 恢复转义的 \\n
+  processed = processed.replace(new RegExp(escapedNewlinePlaceholder, "g"), "\\\\n");
 
-  // 处理实际的换行符
-  text = text.replace(/\n/g, "<br>");
-
-  // 恢复字面量的 \n
-  text = text.replace(new RegExp(literalNewlinePlaceholder, "g"), "\\n");
+  // 处理实际的换行符：转换为 <br>
+  processed = processed.replace(/\n/g, "<br>");
 
   // 处理空格：转换为 &nbsp;
-  text = text.replace(/ /g, "&nbsp;");
+  processed = processed.replace(/ /g, "&nbsp;");
 
-  return text;
+  return processed;
 }
