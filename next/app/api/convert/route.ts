@@ -34,6 +34,10 @@ const md = new MarkdownIt({
     // 这样可以避免某些语言格式导致的解析问题
     const normalizedLang = lang ? 'bash' : '';
     
+    // 重要：在 markdown-it 解析代码块时，str 参数中的内容已经是解析后的文本
+    // 字面量的 \n（在 markdown 源码中写的是 \n）会被 markdown-it 转换为实际的换行符
+    // 但我们需要保留字面量的 \n，所以需要特殊处理
+    
     // 如果指定了语言，尝试进行语法高亮
     if (normalizedLang && hljsInstance) {
       try {
@@ -63,6 +67,8 @@ const md = new MarkdownIt({
         if (result && result.value) {
           // markdown-it 的 highlight 函数只需要返回 <code> 标签内的内容
           // markdown-it 会自动添加 <pre><code> 标签
+          // highlight.js 的输出已经包含了 HTML 标签（如 <span class="hljs-comment">）
+          // 这些标签中的文本节点需要后续处理（空格转 &nbsp;，换行转 <br>）
           return result.value;
         }
       } catch (err) {

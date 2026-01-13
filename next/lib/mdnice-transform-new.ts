@@ -405,13 +405,10 @@ function processCodeContent($code: cheerio.Cheerio<any>): void {
     return;
   }
   
-  // 重要：检查代码内容是否被正确转义
-  // 如果代码中包含未转义的 < 或 >，可能会导致解析错误
-  // 但 markdown-it 应该已经转义了这些字符（< -> &lt;, > -> &gt;）
-  
   // 检查是否包含 HTML 标签（语法高亮）
   // 注意：我们需要区分真正的 HTML 标签和转义的字符（&lt; 和 &gt;）
-  const hasHtmlTags = originalHtml.includes('<') && originalHtml.includes('>') && 
+  // 如果包含 <span class="hljs-xxx"> 这样的标签，说明有语法高亮
+  const hasHtmlTags = /<[a-z][a-z0-9]*[^>]*>/i.test(originalHtml) && 
                       !originalHtml.includes('&lt;') && !originalHtml.includes('&gt;');
   
   if (hasHtmlTags) {
@@ -421,19 +418,34 @@ function processCodeContent($code: cheerio.Cheerio<any>): void {
     
     // 递归处理所有文本节点
     function processTextNodes($element: cheerio.Cheerio<any>): void {
+      // 收集需要处理的节点（先收集，再处理，避免在遍历时修改 DOM）
+      const textNodes: Array<{ $node: cheerio.Cheerio<any>; text: string }> = [];
+      
       $element.contents().each((_, node: any) => {
         if (node.type === 'text') {
           const text = node.data || '';
           if (text) {
-            // 处理文本：将换行转换为 <br>，空格转换为 &nbsp;
-            const processed = processCodeText(text);
-            // 将处理后的文本（可能包含 <br> 和 &nbsp;）插入到 DOM 中
-            // 注意：cheerio 会自动转义 HTML，所以我们需要直接操作节点
-            node.data = processed;
+            textNodes.push({ $node: $temp(node), text });
           }
         } else if (node.type === 'tag') {
           // 递归处理子节点
           processTextNodes($temp(node));
+        }
+      });
+      
+      // 处理收集到的文本节点
+      textNodes.forEach(({ $node, text }) => {
+        const processed = processCodeText(text);
+        
+        // 如果处理后的文本包含 HTML 标签（<br>）或 HTML 实体（&nbsp;），
+        // 需要将其作为 HTML 插入，而不是文本
+        if (processed.includes('<br>') || processed.includes('&nbsp;')) {
+          // 将处理后的文本作为 HTML 插入
+          // 使用 replaceWith 并传入 HTML 字符串，cheerio 会解析它
+          $node.replaceWith(processed);
+        } else {
+          // 如果只包含纯文本，直接更新文本内容
+          $node.text(processed);
         }
       });
     }
