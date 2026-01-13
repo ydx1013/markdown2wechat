@@ -441,11 +441,19 @@ function processCodeContent($code: cheerio.Cheerio<any>): void {
         // 需要将其作为 HTML 插入，而不是文本
         if (processed.includes('<br>') || processed.includes('&nbsp;')) {
           // 将处理后的文本作为 HTML 插入
-          // 使用 replaceWith 并传入 HTML 字符串，cheerio 会解析它
+          // 重要：直接使用 replaceWith 并传入 HTML 字符串
+          // cheerio 会正确解析 HTML，同时保留 // 等特殊字符
+          // 注意：不要使用 cheerio.load 再次解析，直接使用 replaceWith
           $node.replaceWith(processed);
         } else {
-          // 如果只包含纯文本，直接更新文本内容
-          $node.text(processed);
+          // 如果只包含纯文本，直接更新文本节点的 data 属性
+          // 注意：直接操作 node.data 可以确保 // 等特殊字符被正确保留
+          const nodeElement = $node[0];
+          if (nodeElement && nodeElement.type === 'text') {
+            nodeElement.data = processed;
+          } else {
+            $node.text(processed);
+          }
         }
       });
     }
