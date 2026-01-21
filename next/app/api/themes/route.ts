@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDefaultThemeName, listThemeNames } from "../../../lib/theme";
+
 export const runtime = 'edge';
+
 export async function GET() {
   try {
     const themes = listThemeNames();
@@ -20,5 +22,3 @@ export async function GET() {
     );
   }
 }
-
-
