@@ -1,76 +1,75 @@
-import fs from "fs";
-import path from "path";
+/**
+ * 适配 Cloudflare Pages Edge Runtime 的主题管理
+ * 移除了 fs 和 path 依赖，改为静态导入
+ */
 
-type ThemeConfig = any;
+// 1. 手动导入所有主题文件（根据您 theme 目录下的实际文件名添加）
+// 注意：如果主题很多，建议将常用的列在这里
+import Obsidian from "../theme/Obsidian.json";
+import Pornhub黄 from "../theme/Pornhub黄.json";
+import WeFormat from "../theme/WeFormat.json";
+import 丘比特忙 from "../theme/丘比特忙.json";
+import 全栈蓝 from "../theme/全栈蓝.json";
+import 兰青 from "../theme/兰青.json";
+import 凝夜紫 from "../theme/凝夜紫.json";
+import 前端之巅同款 from "../theme/前端之巅同款.json";
+import 奇点 from "../theme/奇点.json";
+import 姹紫 from "../theme/姹紫.json";
+import 嫩青 from "../theme/嫩青.json";
+import 山吹 from "../theme/山吹.json";
+import 极客黑 from "../theme/极客黑.json";
+import 极简黑 from "../theme/极简黑.json";
+import 柠檬黄 from "../theme/柠檬黄.json";
+import 橙心 from "../theme/橙心.json";
+import 橙蓝风 from "../theme/橙蓝风.json";
+import 灵动蓝 from "../theme/灵动蓝.json";
+import 科技蓝 from "../theme/科技蓝.json";
+import 简 from "../theme/简.json";
+import 红绯 from "../theme/红绯.json";
+import 绿意 from "../theme/绿意.json";
+import 草原绿 from "../theme/草原绿.json";
+import 萌粉 from "../theme/萌粉.json";
+import 萌绿 from "../theme/萌绿.json";
+import 蓝莹 from "../theme/蓝莹.json";
+import 蔷薇紫 from "../theme/蔷薇紫.json";
+import 重影 from "../theme/重影.json";
+import 锤子便签主题第2版 from "../theme/锤子便签主题第2版.json";
+import 雁栖湖 from "../theme/雁栖湖.json";
 
-// 读取 Next.js 项目（next 目录）下的 theme：
-// 在 dev 和 build 后运行时，process.cwd() 都指向 next 项目根目录
-const THEME_DIR = path.join(process.cwd(), "theme");
-
-// 缓存主题配置
-const themeConfigCache: Record<string, ThemeConfig> = {};
-const themeStyleCache: Record<string, string> = {};
-const customCssCache: Record<string, string> = {};
+// 2. 建立名称与配置的映射表
+const themesMap: Record<string, any> = {
+  Obsidian, "Pornhub黄": Pornhub黄, WeFormat, "丘比特忙": 丘比特忙, 
+  "全栈蓝": 全栈蓝, "兰青": 兰青, "凝夜紫": 凝夜紫, "前端之巅同款": 前端之巅同款,
+  "奇点": 奇点, "姹紫": 姹紫, "嫩青": 嫩青, "山吹": 山吹, 
+  "极客黑": 极客黑, "极简黑": 极简黑, "柠檬黄": 柠檬黄, "橙心": 橙心, 
+  "橙蓝风": 橙蓝风, "灵动蓝": 灵动蓝, "科技蓝": 科技蓝, "简": 简, 
+  "红绯": 红绯, "绿意": 绿意, "草原绿": 草原绿, "萌粉": 萌粉, 
+  "萌绿": 萌绿, "蓝莹": 蓝莹, "蔷薇紫": 蔷薇紫, "重影": 重影, 
+  "锤子便签主题第2版": 锤子便签主题第2版, "雁栖湖": 雁栖湖
+};
 
 export function listThemeNames(): string[] {
-  if (!fs.existsSync(THEME_DIR)) {
-    return [];
-  }
-
-  const files = fs.readdirSync(THEME_DIR, { withFileTypes: true });
-  const names = files
-    .filter((f) => f.isFile() && f.name.endsWith(".json"))
-    .map((f) => f.name.replace(/\.json$/i, ""))
-    .sort();
-
-  return names;
+  return Object.keys(themesMap).sort();
 }
 
-export function getDefaultThemeName(): string | null {
-  const names = listThemeNames();
-  // 优先使用"兰青"主题
-  if (names.includes('兰青')) {
-    return '兰青';
-  }
-  return names.length > 0 ? names[0] : null;
+export function getDefaultThemeName(): string {
+  return themesMap["兰青"] ? "兰青" : listThemeNames()[0];
 }
 
-function getThemePath(themeName: string): string {
-  return path.join(THEME_DIR, `${themeName}.json`);
-}
-
-function loadThemeConfig(themeName: string): ThemeConfig {
-  if (themeName in themeConfigCache) {
-    return themeConfigCache[themeName];
+function loadThemeConfig(themeName: string): any {
+  const config = themesMap[themeName];
+  if (!config) {
+    throw new Error(`主题配置不存在: ${themeName}`);
   }
-
-  const themePath = getThemePath(themeName);
-  if (!fs.existsSync(themePath)) {
-    throw new Error(`主题配置文件不存在: ${themePath}`);
-  }
-
-  const content = fs.readFileSync(themePath, "utf-8");
-  const config = JSON.parse(content);
-  themeConfigCache[themeName] = config;
   return config;
 }
 
 export function getThemeStyle(themeName: string): string {
-  if (themeName in themeStyleCache) {
-    return themeStyleCache[themeName];
-  }
-
   const config = loadThemeConfig(themeName);
-  const style = config?.data?.style ?? "";
-  themeStyleCache[themeName] = style;
-  return style;
+  return config?.data?.style ?? "";
 }
 
 export function getCustomCss(themeName: string): string {
-  if (themeName in customCssCache) {
-    return customCssCache[themeName];
-  }
-
   const config = loadThemeConfig(themeName);
   const styleModelList: any[] = config?.data?.styleModelList ?? [];
 
@@ -87,8 +86,5 @@ export function getCustomCss(themeName: string): string {
       break;
     }
   }
-
-  customCssCache[themeName] = customCss || "";
-  return customCssCache[themeName];
+  return customCss || "";
 }
-
