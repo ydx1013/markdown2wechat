@@ -1,10 +1,9 @@
 /**
- * 适配 Cloudflare Pages Edge Runtime 的主题管理
- * 移除了 fs 和 path 依赖，改为静态导入
+ * 适配 Cloudflare Pages 的主题管理逻辑
+ * 彻底移除 fs/path 依赖，改为静态导入
  */
 
-// 1. 手动导入所有主题文件（根据您 theme 目录下的实际文件名添加）
-// 注意：如果主题很多，建议将常用的列在这里
+// 1. 手动导入所有主题 JSON 文件
 import Obsidian from "../theme/Obsidian.json";
 import Pornhub黄 from "../theme/Pornhub黄.json";
 import WeFormat from "../theme/WeFormat.json";
@@ -36,7 +35,7 @@ import 重影 from "../theme/重影.json";
 import 锤子便签主题第2版 from "../theme/锤子便签主题第2版.json";
 import 雁栖湖 from "../theme/雁栖湖.json";
 
-// 2. 建立名称与配置的映射表
+// 2. 建立主题名称映射表
 const themesMap: Record<string, any> = {
   Obsidian, "Pornhub黄": Pornhub黄, WeFormat, "丘比特忙": 丘比特忙, 
   "全栈蓝": 全栈蓝, "兰青": 兰青, "凝夜紫": 凝夜紫, "前端之巅同款": 前端之巅同款,
@@ -71,20 +70,17 @@ export function getThemeStyle(themeName: string): string {
 
 export function getCustomCss(themeName: string): string {
   const config = loadThemeConfig(themeName);
-  const styleModelList: any[] = config?.data?.styleModelList ?? [];
+  const styleModelList = config?.data?.styleModelList ?? [];
 
-  let customCss = "";
   for (const model of styleModelList) {
     if (model?.id === "customStyle") {
-      const styles: any[] = model.styles ?? [];
+      const styles = model.styles ?? [];
       for (const styleItem of styles) {
         if (styleItem?.id === "customCss") {
-          customCss = styleItem.value ?? "";
-          break;
+          return styleItem.value ?? "";
         }
       }
-      break;
     }
   }
-  return customCss || "";
+  return "";
 }
