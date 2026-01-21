@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import MarkdownIt from "markdown-it";
 // highlight.js 的正确导入方式
